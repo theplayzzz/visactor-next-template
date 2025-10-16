@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { unstable_noStore } from "next/cache";
 import path from "path";
 import fs from "fs";
 
@@ -42,8 +43,12 @@ export async function getGoogleSheetsClient() {
 
 /**
  * Read data from a specific sheet range
+ * Uses unstable_noStore to prevent caching in production
  */
 export async function getSheetData(sheetName: string, range = "A:Z") {
+  // Prevent caching - always fetch fresh data
+  unstable_noStore();
+
   const sheets = await getGoogleSheetsClient();
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 

@@ -3,13 +3,20 @@ import NPSMetricsCards from "@/components/chart-blocks/components/nps-metrics";
 import NPSGauge from "@/components/chart-blocks/charts/nps-gauge";
 import NPSComparisonChart from "@/components/chart-blocks/charts/nps-comparison";
 import NPSProgressBars from "@/components/chart-blocks/components/nps-progress";
+import NPSGeographic from "@/components/chart-blocks/charts/nps-geographic";
 import { getSheetData, parseSheetData } from "@/lib/google-sheets";
 import type {
   NPSApiResponse,
   NPSComparison,
   NPSDistribution,
   NPSMetrics,
+  RegionMetric,
+  NeighborhoodRanking,
 } from "@/types/nps";
+
+// Force dynamic rendering - disable all caching
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 interface RawNPSRow {
   "Lead ID": string;
@@ -20,6 +27,8 @@ interface RawNPSRow {
   "OBS final": string;
   Telefone: string;
   ETAPA: string;
+  "Região": string;
+  Bairro: string;
 }
 
 function countStars(starString: string): number {
@@ -54,6 +63,26 @@ async function getNPSData(): Promise<NPSApiResponse> {
   let commentsCount = 0;
   let responsesCount = 0;
 
+  // Maps para dados geográficos
+  const regionMap = new Map<
+    string,
+    {
+      totalResponses: number;
+      promoters: number;
+      neutrals: number;
+      detractors: number;
+      totalR2: number;
+    }
+  >();
+  const neighborhoodMap = new Map<
+    string,
+    {
+      region: string;
+      totalResponses: number;
+      detractors: number;
+    }
+  >();
+
   validRows.forEach((row) => {
     const r1Score = countStars(row["R1 NPS Atendimento"]);
     const r2Score = countStars(row["R2 NPS Estabilidade"]);
@@ -74,6 +103,40 @@ async function getNPSData(): Promise<NPSApiResponse> {
       else detractors++;
 
       if (hasComment) commentsCount++;
+
+      // Processar dados geográficos
+      const region = row["Região"]?.trim() || "Não especificado";
+      const neighborhood = row.Bairro?.trim() || "Não especificado";
+
+      // Atualizar mapa de regiões
+      if (!regionMap.has(region)) {
+        regionMap.set(region, {
+          totalResponses: 0,
+          promoters: 0,
+          neutrals: 0,
+          detractors: 0,
+          totalR2: 0,
+        });
+      }
+      const regionData = regionMap.get(region)!;
+      regionData.totalResponses++;
+      regionData.totalR2 += r2Score;
+      if (category === "promoter") regionData.promoters++;
+      else if (category === "neutral") regionData.neutrals++;
+      else regionData.detractors++;
+
+      // Atualizar mapa de bairros
+      const neighborhoodKey = `${region}|${neighborhood}`;
+      if (!neighborhoodMap.has(neighborhoodKey)) {
+        neighborhoodMap.set(neighborhoodKey, {
+          region,
+          totalResponses: 0,
+          detractors: 0,
+        });
+      }
+      const neighborhoodData = neighborhoodMap.get(neighborhoodKey)!;
+      neighborhoodData.totalResponses++;
+      if (category === "detractor") neighborhoodData.detractors++;
     }
   });
 
@@ -136,11 +199,72 @@ async function getNPSData(): Promise<NPSApiResponse> {
     },
   ];
 
+  // Construir métricas por região
+  const byRegion: RegionMetric[] = Array.from(regionMap.entries())
+    .map(([region, data]) => ({
+      region,
+      totalResponses: data.totalResponses,
+      detractors: data.detractors,
+      detractorsPercentage:
+        data.totalResponses > 0
+          ? Math.round((data.detractors / data.totalResponses) * 1000) / 10
+          : 0,
+      promoters: data.promoters,
+      promotersPercentage:
+        data.totalResponses > 0
+          ? Math.round((data.promoters / data.totalResponses) * 1000) / 10
+          : 0,
+      avgStability:
+        data.totalResponses > 0
+          ? Math.round((data.totalR2 / data.totalResponses) * 100) / 100
+          : 0,
+    }))
+    .sort((a, b) => {
+      // Ordenação consistente: primeiro por % detratores, depois por nome da região
+      if (b.detractorsPercentage !== a.detractorsPercentage) {
+        return b.detractorsPercentage - a.detractorsPercentage;
+      }
+      return a.region.localeCompare(b.region);
+    });
+
+  // Construir ranking de bairros (top 10 com maior % de detratores)
+  const byNeighborhood: NeighborhoodRanking[] = Array.from(
+    neighborhoodMap.entries(),
+  )
+    .map(([key, data]) => {
+      const [, neighborhood] = key.split("|");
+      return {
+        neighborhood,
+        region: data.region,
+        detractors: data.detractors,
+        totalResponses: data.totalResponses,
+        detractorsPercentage:
+          data.totalResponses > 0
+            ? Math.round((data.detractors / data.totalResponses) * 1000) / 10
+            : 0,
+      };
+    })
+    .filter((n) => n.totalResponses >= 3) // Mínimo de 3 respostas
+    .sort((a, b) => {
+      // Ordenação consistente: primeiro por %, depois por bairro, depois por região
+      if (b.detractorsPercentage !== a.detractorsPercentage) {
+        return b.detractorsPercentage - a.detractorsPercentage;
+      }
+      if (a.neighborhood !== b.neighborhood) {
+        return a.neighborhood.localeCompare(b.neighborhood);
+      }
+      return a.region.localeCompare(b.region);
+    })
+    .slice(0, 10);
+
   return {
     metrics,
     distribution,
     comparison,
-    recentComments: [],
+    geographicData: {
+      byRegion,
+      byNeighborhood,
+    },
   };
 }
 
@@ -164,6 +288,12 @@ export default async function NPSPage() {
 
           {/* Progress bars */}
           <NPSProgressBars distribution={data.distribution} />
+
+          {/* Métricas Geográficas */}
+          <NPSGeographic
+            byRegion={data.geographicData.byRegion}
+            byNeighborhood={data.geographicData.byNeighborhood}
+          />
         </div>
       </Container>
     </>

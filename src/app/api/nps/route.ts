@@ -4,7 +4,6 @@ import type {
   NPSComparison,
   NPSDistribution,
   NPSMetrics,
-  NPSProcessedData,
 } from "@/types/nps";
 import { NextResponse } from "next/server";
 
@@ -55,7 +54,6 @@ export async function GET() {
     const totalSurveys = validRows.length;
 
     // Processar dados
-    const processedData: NPSProcessedData[] = [];
     let totalR1 = 0;
     let totalR2 = 0;
     let promoters = 0;
@@ -86,17 +84,6 @@ export async function GET() {
         else detractors++;
 
         if (hasComment) commentsCount++;
-
-        processedData.push({
-          leadId: row["Lead ID"],
-          leadName: row["Lead Name"],
-          r1Score,
-          r2Score,
-          totalScore,
-          category,
-          comment: hasComment ? row["OBS final"] : null,
-          hasComment,
-        });
       }
     });
 
@@ -162,16 +149,14 @@ export async function GET() {
       },
     ];
 
-    // Comentários recentes (últimos 50 com comentário)
-    const recentComments = processedData
-      .filter((d) => d.hasComment)
-      .slice(0, 50);
-
     const response: NPSApiResponse = {
       metrics,
       distribution,
       comparison,
-      recentComments,
+      geographicData: {
+        byRegion: [],
+        byNeighborhood: [],
+      },
     };
 
     return NextResponse.json(response);

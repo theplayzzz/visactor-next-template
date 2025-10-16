@@ -46,9 +46,42 @@ export interface NPSComparison {
   total: number;
 }
 
+export interface NPSGeographicData {
+  region: string;
+  neighborhood: string;
+  totalResponses: number;
+  promoters: number;
+  neutrals: number;
+  detractors: number;
+  detractorsPercentage: number;
+  promotersPercentage: number;
+  avgStability: number; // Average R2 score
+}
+
+export interface RegionMetric {
+  region: string;
+  totalResponses: number;
+  detractors: number;
+  detractorsPercentage: number;
+  promoters: number;
+  promotersPercentage: number;
+  avgStability: number;
+}
+
+export interface NeighborhoodRanking {
+  neighborhood: string;
+  region: string;
+  detractors: number;
+  totalResponses: number;
+  detractorsPercentage: number;
+}
+
 export interface NPSApiResponse {
   metrics: NPSMetrics;
   distribution: NPSDistribution[];
   comparison: NPSComparison[];
-  recentComments: NPSProcessedData[];
+  geographicData: {
+    byRegion: RegionMetric[];
+    byNeighborhood: NeighborhoodRanking[];
+  };
 }
