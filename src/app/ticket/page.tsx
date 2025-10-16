@@ -48,6 +48,7 @@ async function getCommentsData(): Promise<NPSProcessedData[]> {
       const category = categorize(totalScore);
       const hasComment = !!row["OBS final"] && row["OBS final"].trim() !== "";
 
+      // Incluir TODOS os comentários não vazios, independente da categoria
       if (hasComment) {
         processedData.push({
           leadId: row["Lead ID"],
@@ -63,7 +64,8 @@ async function getCommentsData(): Promise<NPSProcessedData[]> {
     }
   });
 
-  return processedData.slice(0, 50);
+  // Retornar TODOS os comentários, sem limite
+  return processedData;
 }
 
 export default async function TicketPage() {
