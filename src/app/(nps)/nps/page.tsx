@@ -3,14 +3,12 @@ import NPSMetricsCards from "@/components/chart-blocks/components/nps-metrics";
 import NPSGauge from "@/components/chart-blocks/charts/nps-gauge";
 import NPSComparisonChart from "@/components/chart-blocks/charts/nps-comparison";
 import NPSProgressBars from "@/components/chart-blocks/components/nps-progress";
-import NPSCommentsTable from "@/components/chart-blocks/components/nps-comments-table";
 import { getSheetData, parseSheetData } from "@/lib/google-sheets";
 import type {
   NPSApiResponse,
   NPSComparison,
   NPSDistribution,
   NPSMetrics,
-  NPSProcessedData,
 } from "@/types/nps";
 
 interface RawNPSRow {
@@ -48,7 +46,6 @@ async function getNPSData(): Promise<NPSApiResponse> {
 
   const totalSurveys = validRows.length;
 
-  const processedData: NPSProcessedData[] = [];
   let totalR1 = 0;
   let totalR2 = 0;
   let promoters = 0;
@@ -77,17 +74,6 @@ async function getNPSData(): Promise<NPSApiResponse> {
       else detractors++;
 
       if (hasComment) commentsCount++;
-
-      processedData.push({
-        leadId: row["Lead ID"],
-        leadName: row["Lead Name"],
-        r1Score,
-        r2Score,
-        totalScore,
-        category,
-        comment: hasComment ? row["OBS final"] : null,
-        hasComment,
-      });
     }
   });
 
@@ -150,13 +136,10 @@ async function getNPSData(): Promise<NPSApiResponse> {
     },
   ];
 
-  const recentComments = processedData.filter((d) => d.hasComment).slice(0, 50);
-
   return {
     metrics,
     distribution,
     comparison,
-    recentComments,
   };
 }
 
@@ -180,9 +163,6 @@ export default async function NPSPage() {
 
           {/* Progress bars */}
           <NPSProgressBars distribution={data.distribution} />
-
-          {/* Tabela de comentários */}
-          <NPSCommentsTable comments={data.recentComments} />
         </div>
       </Container>
     </>
