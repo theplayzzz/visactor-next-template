@@ -140,6 +140,7 @@ async function getNPSData(): Promise<NPSApiResponse> {
     metrics,
     distribution,
     comparison,
+    recentComments: [],
   };
 }
 

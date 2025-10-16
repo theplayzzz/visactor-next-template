@@ -2,9 +2,8 @@
 
 import { type IPieChartSpec, VChart } from "@visactor/react-vchart";
 import type { Datum } from "@visactor/vchart/esm/typings";
-import { useChartTheme } from "@/components/providers/chart-theme-provider";
 import { useHydration } from "@/hooks/use-hydration";
-import type { NPSDistribution, NPSMetrics } from "@/types/nps";
+import type { NPSDistribution } from "@/types/nps";
 import { addThousandsSeparator } from "@/lib/utils";
 
 interface ChartProps {
@@ -16,7 +15,6 @@ export default function NPSGaugeChart({
   distribution,
   scoreNPS,
 }: ChartProps) {
-  const theme = useChartTheme();
   const isHydrated = useHydration();
 
   if (!isHydrated) return null;
@@ -33,10 +31,6 @@ export default function NPSGaugeChart({
     return "#da6d67";
   };
 
-  const totalResponses = distribution.reduce(
-    (acc, curr) => acc + curr.value,
-    0,
-  );
 
   const spec: IPieChartSpec = {
     type: "pie",
@@ -129,5 +123,5 @@ export default function NPSGaugeChart({
     },
   };
 
-  return <VChart spec={spec} theme={theme} />;
+  return <VChart spec={spec} />;
 }

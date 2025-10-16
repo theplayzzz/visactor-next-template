@@ -34,7 +34,8 @@ export async function getGoogleSheetsClient() {
   }
 
   const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: "v4", auth: authClient });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sheets = google.sheets({ version: "v4", auth: authClient as any });
 
   return sheets;
 }
@@ -43,20 +44,15 @@ export async function getGoogleSheetsClient() {
  * Read data from a specific sheet range
  */
 export async function getSheetData(sheetName: string, range = "A:Z") {
-  try {
-    const sheets = await getGoogleSheetsClient();
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  const sheets = await getGoogleSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!${range}`,
-    });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!${range}`,
+  });
 
-    return response.data.values || [];
-  } catch (error) {
-    console.error(`Error fetching data from sheet ${sheetName}:`, error);
-    throw error;
-  }
+  return response.data.values || [];
 }
 
 /**

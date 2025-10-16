@@ -50,4 +50,5 @@ export interface NPSApiResponse {
   metrics: NPSMetrics;
   distribution: NPSDistribution[];
   comparison: NPSComparison[];
+  recentComments: NPSProcessedData[];
 }

@@ -176,7 +176,6 @@ export async function GET() {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error fetching NPS data:", error);
     return NextResponse.json(
       {
         error: "Failed to fetch NPS data",

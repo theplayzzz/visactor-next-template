@@ -2,7 +2,6 @@
 
 import { type IBarChartSpec, VChart } from "@visactor/react-vchart";
 import type { Datum } from "@visactor/vchart/esm/typings";
-import { useChartTheme } from "@/components/providers/chart-theme-provider";
 import { useHydration } from "@/hooks/use-hydration";
 import type { NPSComparison } from "@/types/nps";
 
@@ -11,7 +10,6 @@ interface ChartProps {
 }
 
 export default function NPSComparisonChart({ comparison }: ChartProps) {
-  const theme = useChartTheme();
   const isHydrated = useHydration();
 
   if (!isHydrated) return null;
@@ -59,7 +57,10 @@ export default function NPSComparisonChart({ comparison }: ChartProps) {
           },
         },
         label: {
-          formatMethod: (val: number) => val.toFixed(1),
+          formatMethod: (text: string | string[]) => {
+            const value = Array.isArray(text) ? text[0] : text;
+            return parseFloat(value).toFixed(1);
+          },
         },
         title: {
           visible: true,
@@ -105,5 +106,5 @@ export default function NPSComparisonChart({ comparison }: ChartProps) {
     },
   };
 
-  return <VChart spec={spec} theme={theme} />;
+  return <VChart spec={spec} />;
 }

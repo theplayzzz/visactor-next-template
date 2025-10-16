@@ -28,8 +28,7 @@ export async function getNPSData(): Promise<NPSData[]> {
     const parsed = parseSheetData<NPSData>(rawData);
     // Filter out empty rows - check for Lead ID instead
     return parsed.filter((row) => row["Lead ID"] && row["Lead ID"].trim() !== "");
-  } catch (error) {
-    console.error("Error fetching NPS data:", error);
+  } catch {
     return [];
   }
 }
@@ -66,8 +65,7 @@ export async function getNPSByCategory(): Promise<TicketByChannelData[]> {
       { type: "Neutros (7-8)", value: passives },
       { type: "Detratores (0-6)", value: detractors },
     ];
-  } catch (error) {
-    console.error("Error transforming NPS by category:", error);
+  } catch {
     return [];
   }
 }
@@ -116,8 +114,7 @@ export async function getNPSMetrics() {
         change: 0,
       },
     ];
-  } catch (error) {
-    console.error("Error calculating NPS metrics:", error);
+  } catch {
     return [];
   }
 }
