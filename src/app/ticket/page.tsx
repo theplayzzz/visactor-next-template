@@ -72,7 +72,7 @@ export default async function TicketPage() {
   const comments = await getCommentsData();
 
   return (
-    <div className="py-6">
+    <div className="py-3 md:py-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Observações Finais</h1>
         <p className="mt-2 text-sm text-muted-foreground">

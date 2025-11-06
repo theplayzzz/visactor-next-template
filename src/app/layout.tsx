@@ -11,6 +11,9 @@ const gabarito = Gabarito({ subsets: ["latin"], variable: "--font-gabarito" });
 export const metadata: Metadata = {
   title: siteConfig.title,
   description: siteConfig.description,
+  icons: {
+    icon: "/avatar.png",
+  },
 };
 
 export default function RootLayout({
