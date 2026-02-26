@@ -29,14 +29,50 @@ interface OrigemCount {
   count: number;
 }
 
+interface MetricasPorOrigem {
+  leads: number;
+  vendas: number;
+  faturamento: number;
+  perdidos: number;
+  agendamentos: number;
+}
+
 export interface ComercialMetrics {
+  // Totais
   vendasMes: { count: number; faturamento: number };
   perdidosMes: number;
+  leadsTotal: number;
+  agendamentosAbertos: number;
+  // Por origem
+  metricasGoogleAds: MetricasPorOrigem;
+  metricasMetaAds: MetricasPorOrigem;
+  metricasOutbound: MetricasPorOrigem;
+  // Detalhamento
   leadsPorStatus: StatusCount[];
   vendasPorVendedor: VendedorMetrics[];
   leadsPorOrigem: OrigemCount[];
-  agendamentosAbertos: number;
   lastSyncAt: Date | null;
+}
+
+// Função helper para determinar a origem de um lead baseado em suas tags
+function determinarOrigem(
+  tagIds: number[],
+  tagMap: Map<number, string>,
+): "google" | "meta" | "outbound" {
+  for (const tagId of tagIds) {
+    const tagName = tagMap.get(tagId)?.toLowerCase() ?? "";
+    if (
+      tagName.includes("meta") ||
+      tagName.includes("facebook") ||
+      tagName.includes("instagram")
+    ) {
+      return "meta";
+    }
+    if (tagName.includes("google")) {
+      return "google";
+    }
+  }
+  return "outbound";
 }
 
 export async function getComercialMetrics(
@@ -62,13 +98,20 @@ export async function getComercialMetrics(
     )
     .map((s) => s.id);
 
-  // Vendas do período (leads com status "ganho" fechados no período)
-  // Filtra price > 1_000_000 pois são telefones erroneamente no campo preço
-  const vendasQuery = await db
+  // Buscar tags para classificação de origem
+  const tags = await db.select().from(kommoTags);
+  const tagMap = new Map(tags.map((t) => [t.id, t.name]));
+
+  // Buscar usuários para vendas por vendedor
+  const users = await db.select().from(kommoUsers);
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  // ===== MÉTRICAS POR ORIGEM =====
+  // Buscar vendas (ganho) com tags para classificar por origem
+  const vendasComTags = await db
     .select({
-      count: count(),
-      faturamento:
-        sql<string>`coalesce(sum(case when ${kommoLeads.price} <= 1000000 then ${kommoLeads.price} else 0 end), '0')`,
+      tagIds: kommoLeads.tagIds,
+      price: kommoLeads.price,
     })
     .from(kommoLeads)
     .where(
@@ -81,14 +124,9 @@ export async function getComercialMetrics(
       ),
     );
 
-  const vendasMes = {
-    count: vendasQuery[0]?.count ?? 0,
-    faturamento: Number(vendasQuery[0]?.faturamento ?? 0),
-  };
-
-  // Perdidos no mês
-  const perdidosQuery = await db
-    .select({ count: count() })
+  // Buscar perdidos com tags
+  const perdidosComTags = await db
+    .select({ tagIds: kommoLeads.tagIds })
     .from(kommoLeads)
     .where(
       and(
@@ -100,9 +138,149 @@ export async function getComercialMetrics(
       ),
     );
 
-  const perdidosMes = perdidosQuery[0]?.count ?? 0;
+  // Buscar agendamentos com tags
+  const agendamentosComTags = await db
+    .select({ tagIds: kommoLeads.tagIds })
+    .from(kommoLeads)
+    .where(
+      and(
+        agendadoStatusIds.length > 0
+          ? inArray(kommoLeads.statusId, agendadoStatusIds)
+          : undefined,
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
+      ),
+    );
 
-  // Leads por status (criados no período, excluindo terminais)
+  // Buscar TODOS os leads criados no período (independente do status atual)
+  // Isso inclui leads na pipeline, ganhos e perdidos
+  const leadsComTags = await db
+    .select({ tagIds: kommoLeads.tagIds })
+    .from(kommoLeads)
+    .where(
+      and(
+        sql`${kommoLeads.statusId} != 0`, // Apenas exclui status 0 (inválido)
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
+      ),
+    );
+
+  // Inicializar contadores por origem
+  const metricasGoogleAds: MetricasPorOrigem = {
+    leads: 0,
+    vendas: 0,
+    faturamento: 0,
+    perdidos: 0,
+    agendamentos: 0,
+  };
+  const metricasMetaAds: MetricasPorOrigem = {
+    leads: 0,
+    vendas: 0,
+    faturamento: 0,
+    perdidos: 0,
+    agendamentos: 0,
+  };
+  const metricasOutbound: MetricasPorOrigem = {
+    leads: 0,
+    vendas: 0,
+    faturamento: 0,
+    perdidos: 0,
+    agendamentos: 0,
+  };
+
+  // Contabilizar vendas por origem
+  let vendasTotal = 0;
+  let faturamentoTotal = 0;
+  for (const row of vendasComTags) {
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+    const price =
+      row.price && Number(row.price) <= 1000000 ? Number(row.price) : 0;
+
+    vendasTotal++;
+    faturamentoTotal += price;
+
+    if (origem === "google") {
+      metricasGoogleAds.vendas++;
+      metricasGoogleAds.faturamento += price;
+    } else if (origem === "meta") {
+      metricasMetaAds.vendas++;
+      metricasMetaAds.faturamento += price;
+    } else {
+      metricasOutbound.vendas++;
+      metricasOutbound.faturamento += price;
+    }
+  }
+
+  // Contabilizar perdidos por origem
+  let perdidosTotal = 0;
+  for (const row of perdidosComTags) {
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+
+    perdidosTotal++;
+
+    if (origem === "google") {
+      metricasGoogleAds.perdidos++;
+    } else if (origem === "meta") {
+      metricasMetaAds.perdidos++;
+    } else {
+      metricasOutbound.perdidos++;
+    }
+  }
+
+  // Contabilizar agendamentos por origem
+  let agendamentosTotal = 0;
+  for (const row of agendamentosComTags) {
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+
+    agendamentosTotal++;
+
+    if (origem === "google") {
+      metricasGoogleAds.agendamentos++;
+    } else if (origem === "meta") {
+      metricasMetaAds.agendamentos++;
+    } else {
+      metricasOutbound.agendamentos++;
+    }
+  }
+
+  // Contabilizar leads por origem e manter o detalhamento de "Leads por Origem"
+  const origemCounts: Record<string, number> = {};
+  for (const row of leadsComTags) {
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+
+    if (origem === "google") {
+      metricasGoogleAds.leads++;
+      origemCounts["Google Ads"] = (origemCounts["Google Ads"] ?? 0) + 1;
+    } else if (origem === "meta") {
+      metricasMetaAds.leads++;
+      origemCounts["Meta Ads"] = (origemCounts["Meta Ads"] ?? 0) + 1;
+    } else {
+      metricasOutbound.leads++;
+      // Classificação mais detalhada para "Outros"
+      let origemDetalhada = "Outros";
+      for (const tagId of ids) {
+        const tagName = tagMap.get(tagId)?.toLowerCase() ?? "";
+        if (tagName.includes("indicação") || tagName.includes("indicacao")) {
+          origemDetalhada = "Indicação";
+          break;
+        }
+      }
+      origemCounts[origemDetalhada] = (origemCounts[origemDetalhada] ?? 0) + 1;
+    }
+  }
+
+  const leadsTotal =
+    metricasGoogleAds.leads + metricasMetaAds.leads + metricasOutbound.leads;
+
+  const leadsPorOrigem: OrigemCount[] = Object.entries(origemCounts)
+    .map(([origem, count]) => ({ origem, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // ===== LEADS POR STATUS (para tabela Pipeline) =====
   const leadsByStatusQuery = await db
     .select({
       statusId: kommoLeads.statusId,
@@ -131,8 +309,7 @@ export async function getComercialMetrics(
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
-  // Vendas por vendedor (no período)
-  // Filtra price > 1_000_000 pois são telefones erroneamente no campo preço
+  // ===== VENDAS POR VENDEDOR =====
   const vendasPorVendedorQuery = await db
     .select({
       userId: kommoLeads.responsibleUserId,
@@ -152,9 +329,6 @@ export async function getComercialMetrics(
     )
     .groupBy(kommoLeads.responsibleUserId);
 
-  const users = await db.select().from(kommoUsers);
-  const userMap = new Map(users.map((u) => [u.id, u]));
-
   const vendasPorVendedor: VendedorMetrics[] = vendasPorVendedorQuery
     .map((row) => ({
       userId: row.userId!,
@@ -164,66 +338,7 @@ export async function getComercialMetrics(
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Leads por origem (criados no período, baseado em tags)
-  const allLeadsWithTags = await db
-    .select({ tagIds: kommoLeads.tagIds })
-    .from(kommoLeads)
-    .where(
-      and(
-        sql`${kommoLeads.statusId} NOT IN (0, 142, 143)`,
-        gte(kommoLeads.kommoCreatedAt, startDate),
-        lte(kommoLeads.kommoCreatedAt, endDate),
-      ),
-    );
-
-  const tags = await db.select().from(kommoTags);
-  const tagMap = new Map(tags.map((t) => [t.id, t.name]));
-
-  const origemCounts: Record<string, number> = {};
-  for (const row of allLeadsWithTags) {
-    const ids = (row.tagIds ?? []) as number[];
-    let origem = "Outros";
-
-    for (const tagId of ids) {
-      const tagName = tagMap.get(tagId)?.toLowerCase() ?? "";
-      if (tagName.includes("meta") || tagName.includes("facebook") || tagName.includes("instagram")) {
-        origem = "Meta Ads";
-        break;
-      }
-      if (tagName.includes("google")) {
-        origem = "Google Ads";
-        break;
-      }
-      if (tagName.includes("indicação") || tagName.includes("indicacao")) {
-        origem = "Indicação";
-        break;
-      }
-    }
-
-    origemCounts[origem] = (origemCounts[origem] ?? 0) + 1;
-  }
-
-  const leadsPorOrigem: OrigemCount[] = Object.entries(origemCounts)
-    .map(([origem, count]) => ({ origem, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Agendamentos abertos (criados no período)
-  const agendamentosQuery = await db
-    .select({ count: count() })
-    .from(kommoLeads)
-    .where(
-      and(
-        agendadoStatusIds.length > 0
-          ? inArray(kommoLeads.statusId, agendadoStatusIds)
-          : undefined,
-        gte(kommoLeads.kommoCreatedAt, startDate),
-        lte(kommoLeads.kommoCreatedAt, endDate),
-      ),
-    );
-
-  const agendamentosAbertos = agendamentosQuery[0]?.count ?? 0;
-
-  // Last sync
+  // ===== LAST SYNC =====
   const syncRow = await db
     .select({ lastSyncAt: syncState.lastSyncAt })
     .from(syncState)
@@ -233,12 +348,16 @@ export async function getComercialMetrics(
   const lastSyncAt = syncRow[0]?.lastSyncAt ?? null;
 
   return {
-    vendasMes,
-    perdidosMes,
+    vendasMes: { count: vendasTotal, faturamento: faturamentoTotal },
+    perdidosMes: perdidosTotal,
+    leadsTotal,
+    agendamentosAbertos: agendamentosTotal,
+    metricasGoogleAds,
+    metricasMetaAds,
+    metricasOutbound,
     leadsPorStatus,
     vendasPorVendedor,
     leadsPorOrigem,
-    agendamentosAbertos,
     lastSyncAt,
   };
 }
