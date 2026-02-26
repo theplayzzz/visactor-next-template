@@ -37,7 +37,7 @@ export const kommoLeads = pgTable(
   {
     id: bigint("id", { mode: "number" }).primaryKey(),
     name: text("name"),
-    price: integer("price").default(0),
+    price: bigint("price", { mode: "number" }).default(0),
     statusId: bigint("status_id", { mode: "number" }),
     pipelineId: bigint("pipeline_id", { mode: "number" }),
     responsibleUserId: bigint("responsible_user_id", { mode: "number" }),
