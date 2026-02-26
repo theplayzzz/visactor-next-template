@@ -9,6 +9,8 @@ import {
   format,
   parseISO,
   startOfDay,
+  startOfMonth,
+  startOfWeek,
   subDays,
   subMonths,
 } from "date-fns";
@@ -69,6 +71,20 @@ export function ComercialDatePicker({
           to: endOfDay(yesterday),
         };
       },
+    },
+    {
+      label: "Esta semana",
+      getRange: () => ({
+        from: startOfWeek(today, { weekStartsOn: 1 }),
+        to: endOfDay(today),
+      }),
+    },
+    {
+      label: "Este mês",
+      getRange: () => ({
+        from: startOfMonth(today),
+        to: endOfDay(today),
+      }),
     },
     {
       label: "Últimos 7 dias",

@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const META_VENDAS = 55;
+
 function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", {
     style: "currency",
@@ -157,7 +159,7 @@ export default async function ComercialPage({
 
       <Container>
         <div className="flex flex-col gap-6 py-6">
-          {/* Seção 2 — Pipeline Status */}
+          {/* Seção 2 — Pipeline Status (tabela horizontal na ordem do Kommo) */}
           <section>
             <h2
               className={cn(
@@ -168,77 +170,121 @@ export default async function ComercialPage({
               <HandCoins className="h-5 w-5 text-primary" />
               Pipeline
             </h2>
-            <div className="grid grid-cols-2 gap-3 tablet:grid-cols-3 laptop:grid-cols-4">
-              {data.leadsPorStatus.map((status) => (
-                <div
-                  key={status.statusId}
-                  className="rounded-lg border border-border p-4"
-                >
-                  <p
-                    className={cn(
-                      chartTitle({ color: "mute", size: "sm" }),
-                    )}
-                  >
-                    {status.statusName}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold">
-                    {status.count}
-                  </p>
-                </div>
-              ))}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    {data.leadsPorStatus.map((status) => (
+                      <th
+                        key={status.statusId}
+                        className={cn(
+                          chartTitle({ color: "mute", size: "sm" }),
+                          "whitespace-nowrap px-4 py-2 text-center font-normal",
+                        )}
+                      >
+                        {status.statusName}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {data.leadsPorStatus.map((status) => (
+                      <td
+                        key={status.statusId}
+                        className="px-4 py-3 text-center text-2xl font-semibold"
+                      >
+                        {status.count}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
 
-          {/* Seção 3 — Vendas por Vendedor */}
+          {/* Seção 3 — Vendas por Vendedor (barras de progresso com meta) */}
           {data.vendasPorVendedor.length > 0 && (
             <section>
               <h2
                 className={cn(
                   chartTitle({ color: "default", size: "lg" }),
-                  "mb-4 flex items-center gap-2",
+                  "mb-1 flex items-center gap-2",
                 )}
               >
                 <Users className="h-5 w-5 text-primary" />
                 Vendas por Vendedor
               </h2>
-              <div className="rounded-lg border border-border">
-                <div className="grid grid-cols-3 border-b border-border px-4 py-2">
-                  <span
-                    className={cn(
-                      chartTitle({ color: "mute", size: "sm" }),
-                    )}
-                  >
-                    Vendedor
-                  </span>
-                  <span
-                    className={cn(
-                      chartTitle({ color: "mute", size: "sm" }),
-                      "text-center",
-                    )}
-                  >
-                    Vendas
-                  </span>
-                  <span
-                    className={cn(
-                      chartTitle({ color: "mute", size: "sm" }),
-                      "text-right",
-                    )}
-                  >
-                    Faturamento
-                  </span>
-                </div>
-                {data.vendasPorVendedor.map((vendedor) => (
-                  <div
-                    key={vendedor.userId}
-                    className="grid grid-cols-3 border-b border-border px-4 py-3 last:border-b-0"
-                  >
-                    <span className="font-medium">{vendedor.userName}</span>
-                    <span className="text-center">{vendedor.count}</span>
-                    <span className="text-right">
-                      {formatCurrency(vendedor.faturamento)}
-                    </span>
-                  </div>
-                ))}
+              <p
+                className={cn(
+                  chartTitle({ color: "mute", size: "sm" }),
+                  "mb-4",
+                )}
+              >
+                Meta individual: {META_VENDAS} vendas
+              </p>
+              <div className="flex flex-col gap-4">
+                {data.vendasPorVendedor.map((vendedor) => {
+                  const bateuMeta = vendedor.count >= META_VENDAS;
+                  const maxValue = Math.max(
+                    ...data.vendasPorVendedor.map((v) => v.count),
+                    META_VENDAS,
+                  );
+                  const barPercent = Math.min(
+                    (vendedor.count / maxValue) * 100,
+                    100,
+                  );
+                  const metaLinePercent = (META_VENDAS / maxValue) * 100;
+
+                  return (
+                    <div key={vendedor.userId}>
+                      <div className="mb-1 flex items-baseline justify-between">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-medium">
+                            {vendedor.userName}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {formatCurrency(vendedor.faturamento)}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 text-sm">
+                          <span className="font-semibold tabular-nums">
+                            {vendedor.count}
+                          </span>
+                          <span className="text-muted-foreground">
+                            / {META_VENDAS}
+                          </span>
+                          {bateuMeta ? (
+                            <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                              Meta batida
+                            </span>
+                          ) : (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              (faltam {META_VENDAS - vendedor.count})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Barra de progresso */}
+                      <div className="relative h-5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn(
+                            "absolute inset-y-0 left-0 rounded-full transition-all",
+                            bateuMeta
+                              ? "bg-green-500 dark:bg-green-400"
+                              : "bg-blue-500 dark:bg-blue-400",
+                          )}
+                          style={{ width: `${barPercent}%` }}
+                        />
+                        {/* Linha vertical da meta */}
+                        <div
+                          className="absolute inset-y-0 w-0.5 bg-foreground/40"
+                          style={{ left: `${metaLinePercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

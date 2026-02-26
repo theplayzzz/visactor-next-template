@@ -207,14 +207,18 @@ export async function getComercialMetrics(
     .map(([origem, count]) => ({ origem, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Agendamentos abertos
+  // Agendamentos abertos (criados no período)
   const agendamentosQuery = await db
     .select({ count: count() })
     .from(kommoLeads)
     .where(
-      agendadoStatusIds.length > 0
-        ? inArray(kommoLeads.statusId, agendadoStatusIds)
-        : undefined,
+      and(
+        agendadoStatusIds.length > 0
+          ? inArray(kommoLeads.statusId, agendadoStatusIds)
+          : undefined,
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
+      ),
     );
 
   const agendamentosAbertos = agendamentosQuery[0]?.count ?? 0;
