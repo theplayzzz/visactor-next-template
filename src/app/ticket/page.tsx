@@ -69,7 +69,15 @@ async function getCommentsData(): Promise<NPSProcessedData[]> {
 }
 
 export default async function TicketPage() {
-  const comments = await getCommentsData();
+  let comments: NPSProcessedData[] = [];
+  let error: string | null = null;
+
+  try {
+    comments = await getCommentsData();
+  } catch (e) {
+    error =
+      e instanceof Error ? e.message : "Erro desconhecido ao carregar dados";
+  }
 
   return (
     <div className="py-3 md:py-6">
@@ -79,7 +87,26 @@ export default async function TicketPage() {
           Comentários e feedbacks dos clientes
         </p>
       </div>
-      <NPSCommentsTable comments={comments} />
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950">
+          <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-400">
+            Erro ao carregar dados
+          </h2>
+          <p className="text-sm text-red-600 dark:text-red-300">
+            Não foi possível conectar ao Google Sheets. Verifique as
+            credenciais no arquivo{" "}
+            <code className="rounded bg-red-100 px-1 dark:bg-red-900">
+              .env
+            </code>
+            .
+          </p>
+          <p className="mt-3 text-xs text-red-500 dark:text-red-400">
+            {error}
+          </p>
+        </div>
+      ) : (
+        <NPSCommentsTable comments={comments} />
+      )}
     </div>
   );
 }

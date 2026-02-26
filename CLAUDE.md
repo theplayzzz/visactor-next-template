@@ -4,109 +4,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Next.js 15 dashboard template built with VisActor charts, TypeScript, Tailwind CSS, and Jotai state management. It features a responsive design with dark/light mode support and data visualization components.
+Next.js 15 dashboard for NPS (Net Promoter Score) analytics, built with VisActor charts, TypeScript, Tailwind CSS, and Jotai. Data is fetched from Google Sheets. Deployed on Vercel.
 
 ## Package Manager
 
-**IMPORTANT**: This project uses `pnpm` as the package manager (version 9.3.0+). Always use `pnpm` commands, not `npm` or `yarn`.
+**IMPORTANT**: Always use `pnpm` (v9.3.0+), never `npm` or `yarn`.
 
-## Development Commands
+## Commands
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Start development server (runs on http://localhost:3000)
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
-
-# Run linter
-pnpm lint
+pnpm install        # Install dependencies
+pnpm dev            # Dev server on http://localhost:3000
+pnpm dev -H 0.0.0.0 # Dev server accessible externally (VPS)
+pnpm build          # Production build
+pnpm start          # Production server
+pnpm lint           # ESLint
 ```
 
 ## Architecture
 
-### App Structure
+### Route Structure (App Router)
 
-- **App Router**: Uses Next.js 15 App Router with route groups
-  - `(dashboard)` route group contains the main dashboard page
-  - Separate `/ticket` route for ticket management
-  - Root layout at [src/app/layout.tsx](src/app/layout.tsx) includes SideNav and Providers wrapper
+- `(dashboard)/` — Main dashboard (redirects to /nps)
+- `(nps)/nps/` — NPS analytics page (server component, fetches Google Sheets)
+- `ticket/` — Comments/observations table (server component, fetches Google Sheets)
+- `api/nps/`, `api/sheets-data/`, `api/test-sheets/` — API routes (all have try-catch)
+- `actions/sheets-actions.ts` — Server actions for NPS data
 
-### Provider Hierarchy
+Navigation is defined in `src/config/site.tsx` — update the `navigations` array when adding routes.
 
-The app uses a nested provider structure (see [src/app/providers.tsx](src/app/providers.tsx)):
-1. **JotaiProvider** - Global state management
-2. **ModeThemeProvider** - Handles light/dark/system theme switching (next-themes)
-3. **ChartThemeProvider** - Synchronizes VisActor chart themes with mode theme
+### Provider Hierarchy (`src/app/providers.tsx`)
 
-### Chart Theme System
+Outermost → Innermost:
+1. **JotaiProvider** — Atomic state (`src/lib/atoms.ts`: `dateRangeAtom`, `ticketChartDataAtom`)
+2. **ModeThemeProvider** (next-themes) — Light/dark/system theme, `class` strategy
+3. **ChartThemeProvider** — Syncs VisActor themes with mode theme via `ThemeManager.registerTheme()`
 
-**Critical**: VisActor charts require special theme synchronization (see [src/components/providers/chart-theme-provider.tsx](src/components/providers/chart-theme-provider.tsx)):
-- Uses `ThemeManager.registerTheme()` to register custom light/dark themes on mount
-- Automatically syncs chart themes with system/mode theme changes
-- Custom themes defined in [src/config/chart-theme.ts](src/config/chart-theme.ts)
-- Font extracted from CSS variable `--font-gabarito` and applied to chart themes
+### Data Flow
+
+Pages are **server components** that fetch data directly from Google Sheets via `getSheetData()` in `src/lib/google-sheets.ts`. No caching (`unstable_noStore()`, `force-dynamic`).
+
+**Google Sheets authentication** (two paths in `getGoogleSheetsClient()`):
+1. JSON key file at project root (`gen-lang-client-0312769039-f45a7c9ff94b.json`) — used locally
+2. Environment variables (`GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`) — used on Vercel
+
+NPS and Ticket pages have try-catch error handling that shows a friendly UI when credentials are missing/invalid.
 
 ### Chart Component Pattern
 
-All chart components follow this structure:
-```
-src/components/chart-blocks/charts/{chart-name}/
-├── index.tsx        # Wrapper component with title and layout
-├── chart.tsx        # VChart component with data and spec
-└── ...
-```
+All charts live in `src/components/chart-blocks/charts/{name}/`:
+- `index.tsx` — Server wrapper (layout, title)
+- `chart.tsx` — Client component (`"use client"`) with VChart
 
-- Data files stored in `src/data/{chart-name}.ts`
-- Chart wrapper handles layout and title (using ChartTitle component)
-- Inner `chart.tsx` uses `useHydration()` hook to prevent SSR issues with VChart
-- Charts must use the `useChartTheme()` hook and pass theme to VChart
+**Critical**: Every chart component must:
+1. Use `useHydration()` hook and return `null` until hydrated (prevents SSR mismatch)
+2. Be marked `"use client"`
 
-### Configuration
-
-- **Site config**: [src/config/site.tsx](src/config/site.tsx) contains navigation structure and site metadata
-- **Chart themes**: [src/config/chart-theme.ts](src/config/chart-theme.ts) defines custom VisActor themes
-- **Path alias**: `@/*` maps to `src/*` (configured in tsconfig.json)
+Custom chart themes: `src/config/chart-theme.ts` (light/dark, synced via `ChartThemeProvider`).
 
 ### Styling
 
-- Uses Tailwind CSS with custom color variables defined in [src/style/globals.css](src/style/globals.css)
-- Dark mode handled via `class` strategy (see tailwind.config)
-- Custom font: Gabarito from Google Fonts
+- Tailwind CSS with HSL color variables in `src/style/globals.css`
+- Dark mode via `class` strategy
+- Custom breakpoints: `phone` (370px), `tablet` (750px), `laptop` (1000px), `desktop` (1200px)
+- Font: Gabarito (Google Fonts, CSS var `--font-gabarito`)
+- Chart colors: `--chart-1` through `--chart-5`
 
 ## Code Style
 
-### ESLint Rules
-- **No console statements**: Use proper logging or remove console calls
-- **Consistent type imports**: Use `import { type Foo }` for type-only imports
-- **Unused vars**: Prefix with `_` to ignore (e.g., `_unusedVar`)
+### ESLint
+- **No `console.*`** — will error
+- **Inline type imports** — `import { type Foo }` not `import type { Foo }`
+- **Unused vars** — prefix with `_` (e.g., `_unused`)
 
-### Prettier Configuration
-- Import order enforced with specific grouping:
-  1. `server-only`
-  2. External packages (e.g., `@visactor/*`, `next/*`)
-  3. Internal aliases (`@/*`)
-  4. Relative imports (`./`, `../`)
-- Automatically sorts Tailwind classes
-- 80 character line width, 2 space indentation
+### Prettier
+- 80 char width, 2 spaces
+- Import order: `server-only` → external packages → `@/*` aliases → relative (`./`, `../`)
+- Tailwind classes auto-sorted
 
 ## Key Dependencies
 
-- **@visactor/vchart** & **@visactor/react-vchart**: Chart library (v1.12.10+)
-- **jotai**: Atomic state management
-- **next-themes**: Theme switching with system preference support
-- **lucide-react**: Icon library
-- **Shadcn components**: Pre-built UI components in `src/components/ui/`
+- **React 19 RC** — check compatibility before adding packages
+- **@visactor/vchart** + **@visactor/react-vchart** (v1.12.10+)
+- **jotai** — state management
+- **googleapis** — Google Sheets data fetching
+- **next-themes** — theme switching
+- **lucide-react** — icons
+- **Shadcn** — UI components in `src/components/ui/`
+- **date-fns** — date utilities
 
-## Important Notes
+## Environment Setup
 
-- This project uses React 19 RC - ensure compatibility when adding new dependencies
-- Chart components must handle hydration carefully using `useHydration()` hook
-- When adding new routes, consider using route groups for layout inheritance
-- Navigation items are configured in [src/config/site.tsx](src/config/site.tsx) - update both the `navigations` array and add corresponding routes
+Copy `.env.example` to `.env` and fill in Google Sheets credentials, OR place the JSON key file at the project root. The JSON file takes priority. Both are in `.gitignore`.

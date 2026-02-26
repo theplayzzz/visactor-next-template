@@ -269,7 +269,40 @@ async function getNPSData(): Promise<NPSApiResponse> {
 }
 
 export default async function NPSPage() {
-  const data = await getNPSData();
+  let data: NPSApiResponse | null = null;
+  let error: string | null = null;
+
+  try {
+    data = await getNPSData();
+  } catch (e) {
+    error =
+      e instanceof Error ? e.message : "Erro desconhecido ao carregar dados";
+  }
+
+  if (error || !data) {
+    return (
+      <Container>
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950">
+            <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-400">
+              Erro ao carregar dados NPS
+            </h2>
+            <p className="text-sm text-red-600 dark:text-red-300">
+              Não foi possível conectar ao Google Sheets. Verifique se as
+              credenciais estão configuradas corretamente no arquivo{" "}
+              <code className="rounded bg-red-100 px-1 dark:bg-red-900">
+                .env
+              </code>{" "}
+              ou no arquivo JSON de service account.
+            </p>
+            <p className="mt-3 text-xs text-red-500 dark:text-red-400">
+              {error}
+            </p>
+          </div>
+        </div>
+      </Container>
+    );
+  }
 
   return (
     <>

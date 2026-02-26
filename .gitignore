@@ -27,6 +27,7 @@ yarn-error.log*
 
 # local env files
 .env*
+gen-lang-client-0312769039-f45a7c9ff94b.json
 
 # vercel
 .vercel
