@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/sync/kommo?mode=incremental",
-      "schedule": "0 */2 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/sync/kommo/events",
-      "schedule": "30 */2 * * *"
+      "schedule": "0 18 * * *"
     }
   ]
 }
