@@ -6,13 +6,15 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { startOfMonth } from "date-fns";
+import { endOfDay, format, parseISO, startOfDay, subDays } from "date-fns";
 
+import { ComercialDatePicker } from "@/components/comercial/date-range-picker";
 import Container from "@/components/container";
 import { chartTitle } from "@/components/primitives";
 import {
   type ComercialMetrics,
   getComercialMetrics,
+  getMinLeadDate,
 } from "@/lib/kommo-queries";
 import { cn } from "@/lib/utils";
 
@@ -28,14 +30,31 @@ function formatCurrency(value: number): string {
   });
 }
 
-export default async function ComercialPage() {
+export default async function ComercialPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
+  const params = await searchParams;
+
+  const now = new Date();
+  const defaultFrom = startOfDay(subDays(now, 29));
+  const defaultTo = endOfDay(now);
+
+  const startDate = params.from
+    ? startOfDay(parseISO(params.from))
+    : defaultFrom;
+  const endDate = params.to ? endOfDay(parseISO(params.to)) : defaultTo;
+
   let data: ComercialMetrics | null = null;
   let error: string | null = null;
+  let minDate = defaultFrom;
 
   try {
-    const now = new Date();
-    const start = startOfMonth(now);
-    data = await getComercialMetrics(start, now);
+    [data, minDate] = await Promise.all([
+      getComercialMetrics(startDate, endDate),
+      getMinLeadDate(),
+    ]);
   } catch (e) {
     error =
       e instanceof Error ? e.message : "Erro desconhecido ao carregar dados";
@@ -66,9 +85,13 @@ export default async function ComercialPage() {
     );
   }
 
+  const fromStr = format(startDate, "yyyy-MM-dd");
+  const toStr = format(endDate, "yyyy-MM-dd");
+  const minDateStr = format(minDate, "yyyy-MM-dd");
+
   const metricsCards = [
     {
-      title: "Vendas do Mês",
+      title: "Vendas no Período",
       value: data.vendasMes.count.toString(),
       icon: TrendingUp,
       colorClass: "text-green-500 dark:text-green-400",
@@ -99,6 +122,15 @@ export default async function ComercialPage() {
 
   return (
     <>
+      {/* Date Picker */}
+      <Container className="border-b border-border py-4">
+        <ComercialDatePicker
+          from={fromStr}
+          to={toStr}
+          minDate={minDateStr}
+        />
+      </Container>
+
       {/* Seção 1 — Cards de métricas */}
       <Container className="grid grid-cols-1 gap-y-6 border-b border-border py-4 phone:grid-cols-2 laptop:grid-cols-4">
         {metricsCards.map((metric) => (

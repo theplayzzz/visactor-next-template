@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, lte, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lte, min, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -62,11 +62,13 @@ export async function getComercialMetrics(
     )
     .map((s) => s.id);
 
-  // Vendas do mês (leads com status "ganho" fechados no período)
+  // Vendas do período (leads com status "ganho" fechados no período)
+  // Filtra price > 1_000_000 pois são telefones erroneamente no campo preço
   const vendasQuery = await db
     .select({
       count: count(),
-      faturamento: sum(kommoLeads.price),
+      faturamento:
+        sql<string>`coalesce(sum(case when ${kommoLeads.price} <= 1000000 then ${kommoLeads.price} else 0 end), '0')`,
     })
     .from(kommoLeads)
     .where(
@@ -100,7 +102,7 @@ export async function getComercialMetrics(
 
   const perdidosMes = perdidosQuery[0]?.count ?? 0;
 
-  // Leads por status (todos os ativos na pipeline)
+  // Leads por status (criados no período, excluindo terminais)
   const leadsByStatusQuery = await db
     .select({
       statusId: kommoLeads.statusId,
@@ -110,6 +112,8 @@ export async function getComercialMetrics(
     .where(
       and(
         sql`${kommoLeads.statusId} NOT IN (0, 142, 143)`,
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
       ),
     )
     .groupBy(kommoLeads.statusId);
@@ -128,11 +132,13 @@ export async function getComercialMetrics(
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
   // Vendas por vendedor (no período)
+  // Filtra price > 1_000_000 pois são telefones erroneamente no campo preço
   const vendasPorVendedorQuery = await db
     .select({
       userId: kommoLeads.responsibleUserId,
       count: count(),
-      faturamento: sum(kommoLeads.price),
+      faturamento:
+        sql<string>`coalesce(sum(case when ${kommoLeads.price} <= 1000000 then ${kommoLeads.price} else 0 end), '0')`,
     })
     .from(kommoLeads)
     .where(
@@ -158,12 +164,16 @@ export async function getComercialMetrics(
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Leads por origem (baseado em tags)
+  // Leads por origem (criados no período, baseado em tags)
   const allLeadsWithTags = await db
     .select({ tagIds: kommoLeads.tagIds })
     .from(kommoLeads)
     .where(
-      sql`${kommoLeads.statusId} NOT IN (0, 142, 143)`,
+      and(
+        sql`${kommoLeads.statusId} NOT IN (0, 142, 143)`,
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
+      ),
     );
 
   const tags = await db.select().from(kommoTags);
@@ -227,4 +237,13 @@ export async function getComercialMetrics(
     agendamentosAbertos,
     lastSyncAt,
   };
+}
+
+/** Data do lead mais antigo (kommo_created_at) para o preset "Período máximo" */
+export async function getMinLeadDate(): Promise<Date> {
+  const result = await db
+    .select({ minDate: min(kommoLeads.kommoCreatedAt) })
+    .from(kommoLeads);
+
+  return result[0]?.minDate ?? new Date();
 }
