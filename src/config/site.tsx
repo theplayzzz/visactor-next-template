@@ -1,4 +1,9 @@
-import { type LucideIcon, MessagesSquare, Star } from "lucide-react";
+import {
+  type LucideIcon,
+  HandCoins,
+  MessagesSquare,
+  Star,
+} from "lucide-react";
 
 export type SiteConfig = typeof siteConfig;
 export type Navigation = {
@@ -22,5 +27,10 @@ export const navigations: Navigation[] = [
     icon: MessagesSquare,
     name: "Ticket",
     href: "/ticket",
+  },
+  {
+    icon: HandCoins,
+    name: "Comercial",
+    href: "/comercial",
   },
 ];

@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync/kommo?mode=incremental",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/sync/kommo/events",
+      "schedule": "30 */2 * * *"
+    }
+  ]
+}
