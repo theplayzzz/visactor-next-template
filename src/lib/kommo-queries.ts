@@ -35,6 +35,15 @@ interface MetricasPorOrigem {
   faturamento: number;
   perdidos: number;
   agendamentos: number;
+  mqls: number;
+}
+
+export interface CurvaFechamento {
+  origem: string;
+  avgDays: number;
+  medianDays: number;
+  total: number;
+  distribution: { bucket: string; count: number }[];
 }
 
 export interface ComercialMetrics {
@@ -51,6 +60,8 @@ export interface ComercialMetrics {
   leadsPorStatus: StatusCount[];
   vendasPorVendedor: VendedorMetrics[];
   leadsPorOrigem: OrigemCount[];
+  // Curva de fechamento
+  curvaFechamento: CurvaFechamento[];
   lastSyncAt: Date | null;
 }
 
@@ -98,6 +109,13 @@ export async function getComercialMetrics(
     )
     .map((s) => s.id);
 
+  // MQL = leads que avançaram além de SEM RESPOSTA no funil
+  // VIABILIDADE, NEGOCIAÇÃO, AGENDAMENTO, AGENDADO, AGENDADO CONFIRMADO, Closed-Won
+  const mqlStatusIds = [
+    67001959, 67570379, 67570383, 67570387, 67570391, 142,
+    ...wonStatusIds,
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
   // Buscar tags para classificação de origem
   const tags = await db.select().from(kommoTags);
   const tagMap = new Map(tags.map((t) => [t.id, t.name]));
@@ -112,6 +130,8 @@ export async function getComercialMetrics(
     .select({
       tagIds: kommoLeads.tagIds,
       price: kommoLeads.price,
+      kommoCreatedAt: kommoLeads.kommoCreatedAt,
+      kommoClosedAt: kommoLeads.kommoClosedAt,
     })
     .from(kommoLeads)
     .where(
@@ -165,6 +185,20 @@ export async function getComercialMetrics(
       ),
     );
 
+  // Buscar MQLs (leads que avançaram no funil) criados no período
+  const mqlsComTags = await db
+    .select({ tagIds: kommoLeads.tagIds })
+    .from(kommoLeads)
+    .where(
+      and(
+        mqlStatusIds.length > 0
+          ? inArray(kommoLeads.statusId, mqlStatusIds)
+          : undefined,
+        gte(kommoLeads.kommoCreatedAt, startDate),
+        lte(kommoLeads.kommoCreatedAt, endDate),
+      ),
+    );
+
   // Inicializar contadores por origem
   const metricasGoogleAds: MetricasPorOrigem = {
     leads: 0,
@@ -172,6 +206,7 @@ export async function getComercialMetrics(
     faturamento: 0,
     perdidos: 0,
     agendamentos: 0,
+    mqls: 0,
   };
   const metricasMetaAds: MetricasPorOrigem = {
     leads: 0,
@@ -179,6 +214,7 @@ export async function getComercialMetrics(
     faturamento: 0,
     perdidos: 0,
     agendamentos: 0,
+    mqls: 0,
   };
   const metricasOutbound: MetricasPorOrigem = {
     leads: 0,
@@ -186,6 +222,7 @@ export async function getComercialMetrics(
     faturamento: 0,
     perdidos: 0,
     agendamentos: 0,
+    mqls: 0,
   };
 
   // Contabilizar vendas por origem
@@ -245,6 +282,88 @@ export async function getComercialMetrics(
       metricasOutbound.agendamentos++;
     }
   }
+
+  // Contabilizar MQLs por origem
+  for (const row of mqlsComTags) {
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+
+    if (origem === "google") {
+      metricasGoogleAds.mqls++;
+    } else if (origem === "meta") {
+      metricasMetaAds.mqls++;
+    } else {
+      metricasOutbound.mqls++;
+    }
+  }
+
+  // ===== CURVA DE FECHAMENTO =====
+  // Calcular dias lead→venda para cada origem usando vendasComTags
+  const BUCKETS = ["0–1 d", "1–3 d", "3–7 d", "7–14 d", "14–30 d", "30+ d"];
+
+  function calcBucket(days: number): string {
+    if (days < 1) return "0–1 d";
+    if (days < 3) return "1–3 d";
+    if (days < 7) return "3–7 d";
+    if (days < 14) return "7–14 d";
+    if (days < 30) return "14–30 d";
+    return "30+ d";
+  }
+
+  function calcMedian(sorted: number[]): number {
+    if (sorted.length === 0) return 0;
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1]! + sorted[mid]!) / 2
+      : sorted[mid]!;
+  }
+
+  const curvaData: Record<
+    string,
+    { days: number[]; buckets: Record<string, number> }
+  > = {
+    Meta: { days: [], buckets: Object.fromEntries(BUCKETS.map((b) => [b, 0])) },
+    Google: {
+      days: [],
+      buckets: Object.fromEntries(BUCKETS.map((b) => [b, 0])),
+    },
+    Outbound: {
+      days: [],
+      buckets: Object.fromEntries(BUCKETS.map((b) => [b, 0])),
+    },
+  };
+
+  for (const row of vendasComTags) {
+    if (!row.kommoCreatedAt || !row.kommoClosedAt) continue;
+    const days =
+      (row.kommoClosedAt.getTime() - row.kommoCreatedAt.getTime()) /
+      86400000;
+    if (days < 0) continue;
+
+    const ids = (row.tagIds ?? []) as number[];
+    const origem = determinarOrigem(ids, tagMap);
+    const key =
+      origem === "meta" ? "Meta" : origem === "google" ? "Google" : "Outbound";
+    const entry = curvaData[key]!;
+    entry.days.push(days);
+    const bucket = calcBucket(days);
+    entry.buckets[bucket] = (entry.buckets[bucket] ?? 0) + 1;
+  }
+
+  const curvaFechamento: CurvaFechamento[] = Object.entries(curvaData).map(
+    ([key, { days, buckets }]) => {
+      const sorted = [...days].sort((a, b) => a - b);
+      const total = sorted.length;
+      const avgDays =
+        total > 0 ? sorted.reduce((s, d) => s + d, 0) / total : 0;
+      const medianDays = calcMedian(sorted);
+      const distribution = BUCKETS.map((b) => ({
+        bucket: b,
+        count: buckets[b] ?? 0,
+      }));
+      return { origem: key, avgDays, medianDays, total, distribution };
+    },
+  );
 
   // Contabilizar leads por origem e manter o detalhamento de "Leads por Origem"
   const origemCounts: Record<string, number> = {};
@@ -358,6 +477,7 @@ export async function getComercialMetrics(
     leadsPorStatus,
     vendasPorVendedor,
     leadsPorOrigem,
+    curvaFechamento,
     lastSyncAt,
   };
 }

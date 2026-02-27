@@ -277,6 +277,22 @@ export async function getCampanhasMetrics(
   };
 }
 
+/** Retorna o spend total Meta Ads para o intervalo de datas informado */
+export async function getMetaSpend(
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const result = await db
+    .select({
+      total: sql<string>`coalesce(sum(${adsInsights.spend}::numeric), 0)`,
+    })
+    .from(adsInsights)
+    .where(
+      sql`${adsInsights.dateStart} >= ${startDate} AND ${adsInsights.dateStart} <= ${endDate}`,
+    );
+  return Number(result[0]?.total ?? 0);
+}
+
 /** Retorna a data mais antiga de ads_insights para o preset "Período máximo" */
 export async function getMinInsightsDate(): Promise<string> {
   const result = await db
