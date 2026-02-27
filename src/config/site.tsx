@@ -1,6 +1,7 @@
 import {
   type LucideIcon,
   HandCoins,
+  Megaphone,
   MessagesSquare,
   Star,
 } from "lucide-react";
@@ -32,5 +33,10 @@ export const navigations: Navigation[] = [
     icon: HandCoins,
     name: "Comercial",
     href: "/comercial",
+  },
+  {
+    icon: Megaphone,
+    name: "Campanhas",
+    href: "/campanhas",
   },
 ];
