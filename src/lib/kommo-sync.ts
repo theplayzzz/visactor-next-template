@@ -19,7 +19,8 @@ import {
 } from "@/lib/kommo";
 import { SyncLogger } from "@/lib/sync-logger";
 
-const WALL_CLOCK_LIMIT_MS = 8000;
+const WALL_CLOCK_LIMIT_MS = 50_000; // 50s — safe margin below 60s Vercel max
+const STALE_LOCK_MS = 90_000; // 90s — if lock is older than this, it's a zombie
 const STATE_KEY_LEADS_FULL = "kommo_leads_full";
 const STATE_KEY_LEADS_INCREMENTAL = "kommo_leads_incremental";
 const STATE_KEY_EVENTS = "kommo_events";
@@ -62,7 +63,30 @@ async function getOrCreateSyncState(key: string) {
     .where(eq(syncState.id, key))
     .limit(1);
 
-  if (existing.length > 0) return existing[0];
+  if (existing.length > 0) {
+    const state = existing[0];
+
+    // Stale-lock detection: if isRunning but lock was acquired more than
+    // STALE_LOCK_MS ago, the previous execution was killed by Vercel timeout
+    // without running the cleanup. Reset automatically so next run proceeds.
+    if (state.isRunning) {
+      const lockAcquiredAt = state.metadata?.lockAcquiredAt;
+      const isStale =
+        !lockAcquiredAt ||
+        Date.now() - new Date(lockAcquiredAt as string).getTime() >
+          STALE_LOCK_MS;
+
+      if (isStale) {
+        await db
+          .update(syncState)
+          .set({ isRunning: false, metadata: null })
+          .where(eq(syncState.id, key));
+        return { ...state, isRunning: false };
+      }
+    }
+
+    return state;
+  }
 
   const [created] = await db
     .insert(syncState)
@@ -118,7 +142,7 @@ export async function syncLeads(
 
     await db
       .update(syncState)
-      .set({ isRunning: true })
+      .set({ isRunning: true, metadata: { lockAcquiredAt: new Date().toISOString() } })
       .where(eq(syncState.id, stateKey));
 
     const startPage = mode === "full" ? (state.lastPage ?? 0) + 1 : 1;
@@ -141,6 +165,7 @@ export async function syncLeads(
           .set({
             lastPage: page - 1,
             isRunning: false,
+            metadata: null,
           })
           .where(eq(syncState.id, stateKey));
 
@@ -205,6 +230,7 @@ export async function syncLeads(
         lastPage: mode === "full" ? 0 : state.lastPage,
         lastSyncAt: new Date(),
         isRunning: false,
+        metadata: null,
       })
       .where(eq(syncState.id, stateKey));
 
@@ -217,7 +243,7 @@ export async function syncLeads(
   } catch (error) {
     await db
       .update(syncState)
-      .set({ isRunning: false })
+      .set({ isRunning: false, metadata: null })
       .where(eq(syncState.id, stateKey));
 
     await logger.fail(error);
@@ -328,7 +354,7 @@ export async function syncEvents(): Promise<{
 
     await db
       .update(syncState)
-      .set({ isRunning: true })
+      .set({ isRunning: true, metadata: { lockAcquiredAt: new Date().toISOString() } })
       .where(eq(syncState.id, STATE_KEY_EVENTS));
 
     const createdAfter = state.lastSyncAt
@@ -345,7 +371,7 @@ export async function syncEvents(): Promise<{
       if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
         await db
           .update(syncState)
-          .set({ isRunning: false })
+          .set({ isRunning: false, metadata: null })
           .where(eq(syncState.id, STATE_KEY_EVENTS));
 
         await logger.partial({
@@ -413,6 +439,7 @@ export async function syncEvents(): Promise<{
       .set({
         lastSyncAt: new Date(),
         isRunning: false,
+        metadata: null,
       })
       .where(eq(syncState.id, STATE_KEY_EVENTS));
 
@@ -421,7 +448,7 @@ export async function syncEvents(): Promise<{
   } catch (error) {
     await db
       .update(syncState)
-      .set({ isRunning: false })
+      .set({ isRunning: false, metadata: null })
       .where(eq(syncState.id, STATE_KEY_EVENTS));
 
     await logger.fail(error);

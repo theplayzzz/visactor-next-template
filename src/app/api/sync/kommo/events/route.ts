@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { syncEvents } from "@/lib/kommo-sync";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 10;
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
