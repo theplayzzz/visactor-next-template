@@ -29,6 +29,7 @@ interface DateRangePickerProps {
   from: string;
   to: string;
   minDate: string;
+  platform?: "meta" | "google";
 }
 
 interface Preset {
@@ -40,6 +41,7 @@ export function CampanhasDatePicker({
   from,
   to,
   minDate,
+  platform = "meta",
 }: DateRangePickerProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -119,7 +121,9 @@ export function CampanhasDatePicker({
   function navigate(fromDate: Date, toDate: Date) {
     const fromStr = format(fromDate, "yyyy-MM-dd");
     const toStr = format(toDate, "yyyy-MM-dd");
-    router.replace(`/campanhas?from=${fromStr}&to=${toStr}`);
+    router.replace(
+      `/campanhas?platform=${platform}&from=${fromStr}&to=${toStr}`,
+    );
   }
 
   function handlePreset(preset: Preset) {

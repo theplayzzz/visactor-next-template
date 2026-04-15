@@ -2,68 +2,17 @@ import { min, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { adsInsights } from "@/db/schema";
+import {
+  type CampaignBreakdown,
+  type CampanhasMetrics,
+  type RankingDistribution,
+} from "@/types/campanhas";
+
+export { type CampanhasMetrics } from "@/types/campanhas";
 
 interface ActionItem {
   action_type: string;
   value: number | string;
-}
-
-interface CampaignBreakdown {
-  campaignId: string;
-  campaignName: string;
-  spend: number;
-  clicks: number;
-  impressions: number;
-  reach: number;
-  leads: number;
-  cpc: number;
-  cpl: number;
-  ctr: number;
-}
-
-interface RankingDistribution {
-  label: string;
-  count: number;
-}
-
-export interface CampanhasMetrics {
-  // Overview KPIs
-  totalSpend: number;
-  totalLeads: number;
-  cpl: number;
-  totalClicks: number;
-  avgCpc: number;
-  totalImpressions: number;
-  avgCpm: number;
-  avgCtr: number;
-  totalReach: number;
-  avgFrequency: number;
-
-  // Breakdown por campanha
-  campaigns: CampaignBreakdown[];
-
-  // Mensageria
-  conversationsStarted: number;
-  firstReplies: number;
-  costPerConversation: number;
-  responseRate: number;
-
-  // Engajamento
-  linkClicks: number;
-  landingPageViews: number;
-  pageEngagement: number;
-  postEngagement: number;
-  videoViews: number;
-  postReactions: number;
-  comments: number;
-
-  // Rankings de qualidade
-  qualityRanking: RankingDistribution[];
-  conversionRateRanking: RankingDistribution[];
-  engagementRateRanking: RankingDistribution[];
-
-  // Último sync
-  lastExtractedAt: Date | null;
 }
 
 function sumActionType(

@@ -46,9 +46,7 @@ Outermost → Innermost:
 2. **ModeThemeProvider** (next-themes) — Light/dark/system theme, `class` strategy
 3. **ChartThemeProvider** — Syncs VisActor themes with mode theme via `ThemeManager.registerTheme()`
 
-### Data Flow
-
-Pages are **server components** that fetch data directly. No caching (`unstable_noStore()`, `force-dynamic`).
+### Data FlowPages are **server components** that fetch data directly. No caching (`unstable_noStore()`, `force-dynamic`).
 
 **NPS/Ticket data**: Google Sheets via `getSheetData()` in `src/lib/google-sheets.ts`.
 
@@ -182,6 +180,32 @@ pnpm db:studio    # Interface visual (Drizzle Studio)
 - Events sync: `30 */2 * * *` (every 2h at :30)
 - Auth: `CRON_SECRET` env var verified in route handlers
 
+## Google Ads Integration (BigQuery DTS)
+
+Métricas de Google Ads vêm do **BigQuery Data Transfer Service** (conta `8091212488`). Não há sync para o Neon — queries são feitas direto no BigQuery a cada page load (`force-dynamic`).
+
+### BigQuery
+- **Project**: `gen-lang-client-0312769039`
+- **Dataset**: `google_ads_data` em `southamerica-east1`
+- **Sync diário**: 02:00 UTC (DTS Config principal)
+- **Service Account leitora**: `bigquery-google-ads-reader@gen-lang-client-0312769039.iam.gserviceaccount.com` com roles `BigQuery Data Viewer` + `BigQuery Job User`
+
+### Cliente (`src/lib/bigquery.ts`)
+Auth dual igual ao `google-sheets.ts`: arquivo JSON no root em dev (qualquer `gen-lang-client-*.json` que exista) ou env vars `GOOGLE_BIGQUERY_CLIENT_EMAIL` / `GOOGLE_BIGQUERY_PRIVATE_KEY` em prod. Singleton por processo. Helper `getGoogleAdsTable("CampaignStats")` monta nome qualificado a partir de `GOOGLE_BIGQUERY_PROJECT_ID` + `GOOGLE_ADS_BIGQUERY_DATASET` + `GOOGLE_ADS_CUSTOMER_ID`. Sempre usar **named params** (`@start_date`, `@end_date`).
+
+### Queries (`src/lib/google-ads-queries.ts`)
+Expõe `getGoogleAdsCampanhasMetrics(start, end)` com a mesma assinatura de `getCampanhasMetrics` (Meta), retornando `CampanhasMetrics` em `src/types/campanhas.ts`.
+
+Mapeamentos:
+- `metrics_cost_micros / 1e6` = spend em BRL
+- `metrics_conversions` = proxy de "leads"; UI mostra "Conversões"/"CPA" no modo Google
+- `reach`, `frequency`, mensageria e rankings são **zerados** (não existem em Google Ads)
+- `campaign_name` = `campaign_id` enquanto a entity table `p_ads_Campaign_8091212488` não popula (entity tables só vêm pelo sync diário, não pelo backfill)
+- `lastExtractedAt` = `MAX(_PARTITIONTIME)` da tabela de stats
+
+### UI
+Dashboard `/campanhas` tem tabs Meta/Google. Param `?platform=meta|google` (default `meta`). Date picker preserva platform. Componente `CampanhasView` renderiza ambas as plataformas a partir do mesmo tipo `CampanhasMetrics`.
+
 ## Environment Setup
 
 Copy `.env.example` to `.env` and fill in credentials. Required env vars:
@@ -189,4 +213,5 @@ Copy `.env.example` to `.env` and fill in credentials. Required env vars:
 - **Google Sheets**: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID` (or JSON key file at project root)
 - **NeonDB**: `DATABASE_URL`
 - **Kommo CRM**: `URL_KOMMO`, `SECRET_KEY_KOMMO`
+- **Google Ads / BigQuery**: `GOOGLE_BIGQUERY_PROJECT_ID`, `GOOGLE_BIGQUERY_CLIENT_EMAIL`, `GOOGLE_BIGQUERY_PRIVATE_KEY`, `GOOGLE_ADS_CUSTOMER_ID`, `GOOGLE_ADS_BIGQUERY_DATASET` (or JSON key `gen-lang-client-*.json` no root em dev)
 - **Cron auth**: `CRON_SECRET`
