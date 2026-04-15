@@ -22,6 +22,7 @@ import {
   getComercialMetrics,
   getMinLeadDate,
 } from "@/lib/kommo-queries";
+import { getGoogleAdsSpend } from "@/lib/google-ads-queries";
 import { getMetaSpend } from "@/lib/meta-ads-queries";
 import { cn } from "@/lib/utils";
 
@@ -389,14 +390,16 @@ export default async function ComercialPage({
   let error: string | null = null;
   let minDate = defaultFrom;
   let metaSpend = 0;
+  let googleAdsSpend = 0;
 
   try {
     const fromStr0 = format(startDate, "yyyy-MM-dd");
     const toStr0 = format(endDate, "yyyy-MM-dd");
-    [data, minDate, metaSpend] = await Promise.all([
+    [data, minDate, metaSpend, googleAdsSpend] = await Promise.all([
       getComercialMetrics(startDate, endDate),
       getMinLeadDate(),
       getMetaSpend(fromStr0, toStr0),
+      getGoogleAdsSpend(fromStr0, toStr0).catch(() => 0),
     ]);
   } catch (e) {
     error =
@@ -558,6 +561,7 @@ export default async function ComercialPage({
             mqls: data.metricasGoogleAds.mqls,
             vendas: data.metricasGoogleAds.vendas,
             faturamento: data.metricasGoogleAds.faturamento,
+            spend: googleAdsSpend,
           },
           {
             canal: "Outbound",
@@ -678,60 +682,55 @@ export default async function ComercialPage({
         const totalLeadsAll = data.leadsTotal;
         const totalVendasAll = data.vendasMes.count;
         const totalFaturamento = data.vendasMes.faturamento;
+
+        const metaLeads = data.metricasMetaAds.leads;
         const metaVendas = data.metricasMetaAds.vendas;
         const metaFaturamento = data.metricasMetaAds.faturamento;
-
-        const cac =
+        const metaCpl = metaSpend > 0 && metaLeads > 0 ? metaSpend / metaLeads : 0;
+        const metaCac =
           metaSpend > 0 && metaVendas > 0 ? metaSpend / metaVendas : 0;
-        const ticketMedio =
-          totalVendasAll > 0 ? totalFaturamento / totalVendasAll : 0;
-        const roas =
+        const metaRoas =
           metaSpend > 0 && metaFaturamento > 0
             ? metaFaturamento / metaSpend
             : 0;
+
+        const googleLeads = data.metricasGoogleAds.leads;
+        const googleVendas = data.metricasGoogleAds.vendas;
+        const googleFaturamento = data.metricasGoogleAds.faturamento;
+        const googleCpl =
+          googleAdsSpend > 0 && googleLeads > 0
+            ? googleAdsSpend / googleLeads
+            : 0;
+        const googleCac =
+          googleAdsSpend > 0 && googleVendas > 0
+            ? googleAdsSpend / googleVendas
+            : 0;
+        const googleRoas =
+          googleAdsSpend > 0 && googleFaturamento > 0
+            ? googleFaturamento / googleAdsSpend
+            : 0;
+
+        const ticketMedio =
+          totalVendasAll > 0 ? totalFaturamento / totalVendasAll : 0;
         const convGeral =
           totalLeadsAll > 0 ? (totalVendasAll / totalLeadsAll) * 100 : 0;
 
-        const cards = [
-          {
-            icon: DollarSign,
-            iconBg: "bg-emerald-50 dark:bg-emerald-950",
-            iconColor: "text-emerald-500",
-            value: metaSpend > 0 ? formatCurrency(cac) : "—",
-            label: "CAC Meta",
-            sub:
-              metaSpend > 0
-                ? "por cliente adquirido via Meta"
-                : "sem dados de investimento",
-          },
-          {
-            icon: TrendingUp,
-            iconBg: "bg-green-50 dark:bg-green-950",
-            iconColor: "text-green-500",
-            value: formatCurrency(ticketMedio),
-            label: "Ticket Médio",
-            sub: "faturamento médio por venda",
-          },
-          {
-            icon: BarChart3,
-            iconBg: "bg-blue-50 dark:bg-blue-950",
-            iconColor: "text-blue-500",
-            value: metaSpend > 0 ? roas.toFixed(1) + "×" : "—",
-            label: "ROAS",
-            sub:
-              metaSpend > 0
-                ? "retorno sobre investimento Meta"
-                : "sem dados de investimento",
-          },
-          {
-            icon: Percent,
-            iconBg: "bg-purple-50 dark:bg-purple-950",
-            iconColor: "text-purple-500",
-            value: convGeral.toFixed(1) + "%",
-            label: "Conv. Geral",
-            sub: "de lead a venda (todos canais)",
-          },
-        ];
+        const subCard = (
+          label: string,
+          value: string,
+          sub: string,
+          textColor: string,
+        ) => (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {label}
+            </p>
+            <p className={cn("text-2xl font-semibold tabular-nums", textColor)}>
+              {value}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
+          </div>
+        );
 
         return (
           <div className="flex flex-col gap-4 border-b border-border py-6">
@@ -744,22 +743,113 @@ export default async function ComercialPage({
               <DollarSign className="h-5 w-5 text-primary" />
               Unit Economics
             </h2>
-            <div className="grid grid-cols-2 gap-4 tablet:grid-cols-4">
-              {cards.map((c) => (
-                <div
-                  key={c.label}
-                  className="rounded-lg border border-border bg-card/50 p-4"
-                >
-                  <div className={cn("mb-2 inline-flex rounded-lg p-2", c.iconBg)}>
-                    <c.icon className={cn("h-4 w-4", c.iconColor)} />
-                  </div>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {c.value}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{c.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{c.sub}</p>
+
+            {/* Bloco Meta (pink) */}
+            <div className="rounded-lg border border-pink-200 bg-pink-50/50 p-4 dark:border-pink-900 dark:bg-pink-950/20">
+              <div className="mb-3 flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-pink-500" />
+                <span className="text-xs font-medium uppercase tracking-wide text-pink-500">
+                  Meta Ads
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 tablet:grid-cols-4">
+                {subCard(
+                  "Investimento",
+                  metaSpend > 0 ? formatCurrency(metaSpend) : "—",
+                  "total no período",
+                  "text-foreground",
+                )}
+                {subCard(
+                  "CPL",
+                  metaSpend > 0 && metaCpl > 0 ? formatCurrency(metaCpl) : "—",
+                  "por lead captado",
+                  "text-pink-500",
+                )}
+                {subCard(
+                  "CAC",
+                  metaSpend > 0 && metaCac > 0 ? formatCurrency(metaCac) : "—",
+                  "por cliente adquirido",
+                  "text-pink-500",
+                )}
+                {subCard(
+                  "ROAS",
+                  metaSpend > 0 && metaRoas > 0
+                    ? metaRoas.toFixed(1) + "×"
+                    : "—",
+                  "retorno sobre investimento",
+                  "text-pink-500",
+                )}
+              </div>
+            </div>
+
+            {/* Bloco Google (blue) */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+              <div className="mb-3 flex items-center gap-2">
+                <Search className="h-4 w-4 text-blue-500" />
+                <span className="text-xs font-medium uppercase tracking-wide text-blue-500">
+                  Google Ads
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 tablet:grid-cols-4">
+                {subCard(
+                  "Investimento",
+                  googleAdsSpend > 0 ? formatCurrency(googleAdsSpend) : "—",
+                  "total no período",
+                  "text-foreground",
+                )}
+                {subCard(
+                  "CPL",
+                  googleAdsSpend > 0 && googleCpl > 0
+                    ? formatCurrency(googleCpl)
+                    : "—",
+                  "por lead captado",
+                  "text-blue-500",
+                )}
+                {subCard(
+                  "CAC",
+                  googleAdsSpend > 0 && googleCac > 0
+                    ? formatCurrency(googleCac)
+                    : "—",
+                  "por cliente adquirido",
+                  "text-blue-500",
+                )}
+                {subCard(
+                  "ROAS",
+                  googleAdsSpend > 0 && googleRoas > 0
+                    ? googleRoas.toFixed(1) + "×"
+                    : "—",
+                  "retorno sobre investimento",
+                  "text-blue-500",
+                )}
+              </div>
+            </div>
+
+            {/* Bloco Geral (neutro) */}
+            <div className="grid grid-cols-2 gap-4 tablet:grid-cols-2">
+              <div className="rounded-lg border border-border bg-card/50 p-4">
+                <div className="mb-2 inline-flex rounded-lg bg-green-50 p-2 dark:bg-green-950">
+                  <TrendingUp className="h-4 w-4 text-green-500" />
                 </div>
-              ))}
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatCurrency(ticketMedio)}
+                </p>
+                <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  faturamento médio por venda
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/50 p-4">
+                <div className="mb-2 inline-flex rounded-lg bg-purple-50 p-2 dark:bg-purple-950">
+                  <Percent className="h-4 w-4 text-purple-500" />
+                </div>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {convGeral.toFixed(1)}%
+                </p>
+                <p className="text-sm text-muted-foreground">Conv. Geral</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  de lead a venda (todos canais)
+                </p>
+              </div>
             </div>
           </div>
         );
