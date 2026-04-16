@@ -1,5 +1,6 @@
 import {
   type LucideIcon,
+  CalendarRange,
   HandCoins,
   Megaphone,
   MessagesSquare,
@@ -38,5 +39,10 @@ export const navigations: Navigation[] = [
     icon: Megaphone,
     name: "Campanhas",
     href: "/campanhas",
+  },
+  {
+    icon: CalendarRange,
+    name: "1º Tri 2026",
+    href: "/trimestre",
   },
 ];
