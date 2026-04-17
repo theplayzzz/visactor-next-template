@@ -1,8 +1,15 @@
 "use client";
 
-import { VChart } from "@visactor/react-vchart";
+import { type IBarChartSpec, VChart } from "@visactor/react-vchart";
+import type { Datum } from "@visactor/vchart/esm/typings";
 
 import { useHydration } from "@/hooks/use-hydration";
+
+const COLORS: Record<string, string> = {
+  Leads: "#3b82f6", // blue-500
+  Vendas: "#10b981", // emerald-500
+  Perdidos: "#f43f5e", // rose-500
+};
 
 const data = [
   { month: "Janeiro", leads: 463, vendas: 159, perdidos: 310 },
@@ -15,16 +22,8 @@ export function FunnelEvolutionChart() {
   if (!isHydrated) return null;
 
   const seriesData = [
-    ...data.map((d) => ({
-      month: d.month,
-      value: d.leads,
-      type: "Leads",
-    })),
-    ...data.map((d) => ({
-      month: d.month,
-      value: d.vendas,
-      type: "Vendas",
-    })),
+    ...data.map((d) => ({ month: d.month, value: d.leads, type: "Leads" })),
+    ...data.map((d) => ({ month: d.month, value: d.vendas, type: "Vendas" })),
     ...data.map((d) => ({
       month: d.month,
       value: d.perdidos,
@@ -32,36 +31,75 @@ export function FunnelEvolutionChart() {
     })),
   ];
 
-  const spec = {
-    type: "bar" as const,
-    data: [{ values: seriesData }],
-    xField: "month",
+  const spec: IBarChartSpec = {
+    type: "bar",
+    data: [{ id: "funnel", values: seriesData }],
+    xField: ["month", "type"],
     yField: "value",
     seriesField: "type",
-    stack: false,
     bar: {
-      style: { cornerRadius: [4, 4, 0, 0], fillOpacity: 0.9 },
+      style: {
+        cornerRadius: [4, 4, 0, 0],
+        fillOpacity: 0.95,
+        fill: (datum: Datum) =>
+          COLORS[datum.type as string] ?? "#94a3b8",
+      },
+      state: {
+        hover: { stroke: "#fff", lineWidth: 1 },
+      },
     },
-    color: ["hsl(220, 70%, 50%)", "hsl(160, 60%, 45%)", "hsl(340, 75%, 55%)"],
+    label: {
+      visible: true,
+      position: "top",
+      style: { fontSize: 10, fontWeight: "bold", fill: "#e2e8f0" },
+    },
     axes: [
       {
-        orient: "bottom" as const,
-        label: { style: { fontSize: 12 } },
+        orient: "bottom",
+        type: "band",
+        label: {
+          style: { fontSize: 12, fill: "#94a3b8" },
+        },
       },
       {
-        orient: "left" as const,
-        label: { style: { fontSize: 11 } },
-        grid: { style: { lineDash: [4, 4], stroke: "rgba(148,163,184,0.15)" } },
+        orient: "left",
+        type: "linear",
+        label: {
+          style: { fontSize: 11, fill: "#94a3b8" },
+        },
+        grid: {
+          visible: true,
+          style: {
+            lineDash: [4, 4],
+            stroke: "#94a3b8",
+            strokeOpacity: 0.15,
+          },
+        },
       },
     ],
     legends: {
       visible: true,
-      orient: "top" as const,
-      position: "start" as const,
+      orient: "top",
+      position: "start",
       padding: { bottom: 12 },
-      item: { shape: { style: { symbolType: "circle" } } },
+      item: {
+        shape: { style: { symbolType: "square" } },
+        label: { style: { fontSize: 12, fill: "#cbd5e1" } },
+      },
     },
-    animationAppear: { duration: 600 },
+    tooltip: {
+      mark: {
+        title: { visible: false },
+        content: [
+          {
+            key: (datum: Datum | undefined) => datum?.type,
+            value: (datum: Datum | undefined) =>
+              Number(datum?.value ?? 0).toLocaleString("pt-BR"),
+          },
+        ],
+      },
+    },
+    animationAppear: { duration: 800 },
     padding: { left: 8, right: 8, top: 8, bottom: 8 },
   };
 

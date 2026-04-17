@@ -1,14 +1,20 @@
 "use client";
 
-import { VChart } from "@visactor/react-vchart";
+import { type IBarChartSpec, VChart } from "@visactor/react-vchart";
+import type { Datum } from "@visactor/vchart/esm/typings";
 
 import { useHydration } from "@/hooks/use-hydration";
 
+const COLORS: Record<string, string> = {
+  Leads: "#3b82f6",
+  Vendas: "#10b981",
+};
+
 const data = [
-  { canal: "Outbound", leads: 668, vendas: 346, closeRate: 48.2 },
-  { canal: "Google", leads: 336, vendas: 84, closeRate: 26.5 },
-  { canal: "Meta", leads: 340, vendas: 40, closeRate: 11.6 },
-  { canal: "Instagram", leads: 70, vendas: 22, closeRate: 34.9 },
+  { canal: "Outbound", leads: 668, vendas: 346 },
+  { canal: "Google", leads: 336, vendas: 84 },
+  { canal: "Meta", leads: 340, vendas: 40 },
+  { canal: "Instagram", leads: 70, vendas: 22 },
 ];
 
 export function ChannelComparisonChart() {
@@ -16,50 +22,75 @@ export function ChannelComparisonChart() {
   if (!isHydrated) return null;
 
   const seriesData = [
-    ...data.map((d) => ({
-      canal: d.canal,
-      value: d.leads,
-      type: "Leads",
-    })),
-    ...data.map((d) => ({
-      canal: d.canal,
-      value: d.vendas,
-      type: "Vendas",
-    })),
+    ...data.map((d) => ({ canal: d.canal, value: d.leads, type: "Leads" })),
+    ...data.map((d) => ({ canal: d.canal, value: d.vendas, type: "Vendas" })),
   ];
 
-  const spec = {
-    type: "bar" as const,
-    data: [{ values: seriesData }],
-    xField: "canal",
+  const spec: IBarChartSpec = {
+    type: "bar",
+    data: [{ id: "channels", values: seriesData }],
+    xField: ["canal", "type"],
     yField: "value",
     seriesField: "type",
-    stack: false,
     bar: {
-      style: { cornerRadius: [4, 4, 0, 0], fillOpacity: 0.9 },
+      style: {
+        cornerRadius: [4, 4, 0, 0],
+        fillOpacity: 0.95,
+        fill: (datum: Datum) =>
+          COLORS[datum.type as string] ?? "#94a3b8",
+      },
+      state: {
+        hover: { stroke: "#fff", lineWidth: 1 },
+      },
     },
-    color: ["hsl(220, 70%, 50%)", "hsl(160, 60%, 45%)"],
+    label: {
+      visible: true,
+      position: "top",
+      style: { fontSize: 11, fontWeight: "bold", fill: "#e2e8f0" },
+    },
     axes: [
       {
-        orient: "bottom" as const,
-        label: { style: { fontSize: 12 } },
+        orient: "bottom",
+        type: "band",
+        label: { style: { fontSize: 12, fill: "#94a3b8" } },
       },
       {
-        orient: "left" as const,
-        label: { style: { fontSize: 11 } },
+        orient: "left",
+        type: "linear",
+        label: { style: { fontSize: 11, fill: "#94a3b8" } },
         grid: {
-          style: { lineDash: [4, 4], stroke: "rgba(148,163,184,0.15)" },
+          visible: true,
+          style: {
+            lineDash: [4, 4],
+            stroke: "#94a3b8",
+            strokeOpacity: 0.15,
+          },
         },
       },
     ],
     legends: {
       visible: true,
-      orient: "top" as const,
-      position: "start" as const,
+      orient: "top",
+      position: "start",
       padding: { bottom: 12 },
-      item: { shape: { style: { symbolType: "circle" } } },
+      item: {
+        shape: { style: { symbolType: "square" } },
+        label: { style: { fontSize: 12, fill: "#cbd5e1" } },
+      },
     },
-    animationAppear: { duration: 600 },
+    tooltip: {
+      mark: {
+        title: { visible: false },
+        content: [
+          {
+            key: (datum: Datum | undefined) => datum?.type,
+            value: (datum: Datum | undefined) =>
+              Number(datum?.value ?? 0).toLocaleString("pt-BR"),
+          },
+        ],
+      },
+    },
+    animationAppear: { duration: 800 },
     padding: { left: 8, right: 8, top: 8, bottom: 8 },
   };
 
