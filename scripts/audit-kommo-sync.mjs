@@ -14,4 +14,12 @@ const [counts] = await sql`
   SELECT (SELECT COUNT(*)::int FROM kommo_leads) AS leads,
     (SELECT COUNT(*)::int FROM kommo_lead_events) AS events
 `;
-console.log(JSON.stringify({ states, logs, counts }));
+const [lastFailure] = await sql`
+  SELECT id, LEFT(error_message, 500) AS message FROM sync_logs
+  WHERE data_source = 'kommo' AND status = 'failed' ORDER BY id DESC LIMIT 1
+`;
+const safeFailure = lastFailure && {
+  id: lastFailure.id,
+  message: lastFailure.message?.replace(/(Bearer\s+|access_token[=:]\s*)[^\s"&]+/gi, "$1[redacted]"),
+};
+console.log(JSON.stringify({ states, logs, counts, lastFailure: safeFailure }));

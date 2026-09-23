@@ -433,6 +433,12 @@ export async function syncEvents(): Promise<{
       eventsProcessed += events.length;
       pagesProcessed++;
       page++;
+      if (pagesProcessed % 10 === 0) {
+        await db
+          .update(syncState)
+          .set({ lastPage: page - 1 })
+          .where(eq(syncState.id, STATE_KEY_EVENTS));
+      }
     }
 
     await db

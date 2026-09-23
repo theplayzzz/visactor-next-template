@@ -103,23 +103,36 @@ async function kommoFetch<T>(
     );
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${KOMMO_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${KOMMO_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (error) {
+      if (attempt === 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2_000 * 2 ** attempt));
+      continue;
+    }
 
-  if (res.status === 204) return null;
+    if ([429, 500, 502, 503, 504].includes(res.status) && attempt < 3) {
+      await res.arrayBuffer().catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 2_000 * 2 ** attempt));
+      continue;
+    }
 
-  if (!res.ok) {
-    const errorBody = await res.text();
-    throw new Error(
-      `Kommo API error ${res.status}: ${errorBody}`,
-    );
+    if (res.status === 204) return null;
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`Kommo API error ${res.status}: ${errorBody}`);
+    }
+    return res.json() as Promise<T>;
   }
-
-  return res.json() as Promise<T>;
+  throw new Error("Kommo API indisponível após novas tentativas");
 }
 
 export async function fetchLeadsPage(
