@@ -1,0 +1,10 @@
+[Unit]
+Description=AdaptLink Meta Ads daily collection timer
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 UTC
+Persistent=true
+Unit=adaptlink-meta.service
+
+[Install]
+WantedBy=timers.target

@@ -19,8 +19,8 @@ import {
 } from "@/lib/kommo";
 import { SyncLogger } from "@/lib/sync-logger";
 
-const WALL_CLOCK_LIMIT_MS = 50_000; // 50s — safe margin below 60s Vercel max
-const STALE_LOCK_MS = 90_000; // 90s — if lock is older than this, it's a zombie
+const WALL_CLOCK_LIMIT_MS = 10 * 60_000; // Container job: bounded to ten minutes
+const STALE_LOCK_MS = 20 * 60_000;
 const STATE_KEY_LEADS_FULL = "kommo_leads_full";
 const STATE_KEY_LEADS_INCREMENTAL = "kommo_leads_incremental";
 const STATE_KEY_EVENTS = "kommo_events";
@@ -362,7 +362,7 @@ export async function syncEvents(): Promise<{
       : undefined;
 
     const startTime = Date.now();
-    let page = 1;
+    let page = (state.lastPage ?? 0) + 1;
     let pagesProcessed = 0;
     let eventsProcessed = 0;
     let hasNext = true;
@@ -371,7 +371,7 @@ export async function syncEvents(): Promise<{
       if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
         await db
           .update(syncState)
-          .set({ isRunning: false, metadata: null })
+          .set({ lastPage: page - 1, isRunning: false, metadata: null })
           .where(eq(syncState.id, STATE_KEY_EVENTS));
 
         await logger.partial({
@@ -437,6 +437,7 @@ export async function syncEvents(): Promise<{
     await db
       .update(syncState)
       .set({
+        lastPage: 0,
         lastSyncAt: new Date(),
         isRunning: false,
         metadata: null,

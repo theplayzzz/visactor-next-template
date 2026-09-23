@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    image: adaptlink-app:local
+    container_name: adaptlink-app
+    restart: unless-stopped
+    env_file:
+      - /opt/adaptlink/.env
+    mem_limit: 640m
+    cpus: 1.0
+    networks:
+      - dokploy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.adaptlink.loadbalancer.server.port=3000
+      - traefik.http.routers.adaptlink-staging.rule=Host(`adaptlink.178-156-151-53.sslip.io`)
+      - traefik.http.routers.adaptlink-staging.entrypoints=websecure
+      - traefik.http.routers.adaptlink-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.adaptlink-prod.rule=Host(`adapt.link.grupogrowon.com.br`)
+      - traefik.http.routers.adaptlink-prod.entrypoints=websecure
+      - traefik.http.routers.adaptlink-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.adaptlink-http.rule=Host(`adapt.link.grupogrowon.com.br`) || Host(`adaptlink.178-156-151-53.sslip.io`)
+      - traefik.http.routers.adaptlink-http.entrypoints=web
+      - traefik.http.routers.adaptlink-http.middlewares=redirect-to-https@file
+
+networks:
+  dokploy-network:
+    external: true

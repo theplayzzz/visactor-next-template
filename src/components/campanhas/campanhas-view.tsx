@@ -142,10 +142,25 @@ export function CampanhasView({ data, platform }: CampanhasViewProps) {
     (data.qualityRanking.length > 0 ||
       data.conversionRateRanking.length > 0 ||
       data.engagementRateRanking.length > 0);
-  const syncSource = isMeta ? "Airbyte" : "BigQuery DTS";
+  const syncSource = isMeta ? "Meta Graph API" : "BigQuery DTS";
+  const staleMeta = isMeta && data.lastExtractedAt &&
+    Date.now() - data.lastExtractedAt.getTime() > 48 * 60 * 60 * 1000;
 
   return (
     <>
+      {isMeta && (!data.hasRows || staleMeta) && (
+        <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          {staleMeta
+            ? "A coleta da Meta está atrasada; os números podem estar incompletos."
+            : "Não há insights da Meta para o período selecionado. Zero aqui não confirma ausência de anúncios ou investimento."}
+        </p>
+      )}
+      {isMeta && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Leads são eventos reportados pela Meta; conversas de WhatsApp aparecem em Mensageria.
+          Alcance soma anúncios/dias e não representa pessoas únicas no período; frequência é estimada.
+        </p>
+      )}
       {/* Seção 1 — KPIs Gerais */}
       <div className="border-b border-border py-6">
         <h2
@@ -166,14 +181,14 @@ export function CampanhasView({ data, platform }: CampanhasViewProps) {
             bgColor="bg-emerald-50 dark:bg-emerald-950"
           />
           <KpiCard
-            label={isMeta ? "Leads" : "Conversões"}
+            label={isMeta ? "Leads (evento Meta)" : "Conversões"}
             value={formatNumber(data.totalLeads)}
             icon={Users}
             iconColor="text-purple-500"
             bgColor="bg-purple-50 dark:bg-purple-950"
           />
           <KpiCard
-            label={isMeta ? "CPL" : "CPA"}
+            label={isMeta ? "CPL (evento Meta)" : "CPA"}
             value={formatCurrency(data.cpl)}
             icon={Target}
             iconColor="text-orange-500"
@@ -217,14 +232,14 @@ export function CampanhasView({ data, platform }: CampanhasViewProps) {
           {isMeta && (
             <>
               <KpiCard
-                label="Alcance"
+                label="Soma do alcance diário"
                 value={formatNumber(data.totalReach)}
                 icon={Megaphone}
                 iconColor="text-pink-500"
                 bgColor="bg-pink-50 dark:bg-pink-950"
               />
               <KpiCard
-                label="Frequência"
+                label="Freq. estimada"
                 value={data.avgFrequency.toFixed(2)}
                 icon={Repeat}
                 iconColor="text-slate-500"
@@ -254,13 +269,13 @@ export function CampanhasView({ data, platform }: CampanhasViewProps) {
                   {[
                     "Campanha",
                     "Investimento",
-                    isMeta ? "Leads" : "Conversões",
-                    isMeta ? "CPL" : "CPA",
+                    isMeta ? "Leads (evento)" : "Conversões",
+                    isMeta ? "CPL (evento)" : "CPA",
                     "Cliques",
                     "CPC",
                     "CTR",
                     "Impressões",
-                    ...(isMeta ? ["Alcance"] : []),
+                    ...(isMeta ? ["Soma alcance diário"] : []),
                   ].map((col) => (
                     <th
                       key={col}
@@ -469,6 +484,9 @@ export function CampanhasView({ data, platform }: CampanhasViewProps) {
                 timeZone: "America/Sao_Paulo",
               })
             : "Nunca"}
+          {isMeta && data.lastReportingDate && (
+            <> · Última data de campanha: {data.lastReportingDate}</>
+          )}
         </p>
       </div>
     </>

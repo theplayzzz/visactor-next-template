@@ -1,0 +1,10 @@
+[Unit]
+Description=AdaptLink Kommo events daily timer
+
+[Timer]
+OnCalendar=*-*-* 18:00:00 UTC
+Persistent=true
+Unit=adaptlink-kommo-events.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+.env*
+*.pem
+gen-lang-client-*.json
+*-service-account*.json
+*-credentials*.json
+docs
+output

@@ -1,0 +1,9 @@
+[Unit]
+Description=AdaptLink Meta Ads daily collection
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=20min
+ExecStart=/usr/bin/docker exec adaptlink-app node /app/scripts/sync-meta-ads.mjs

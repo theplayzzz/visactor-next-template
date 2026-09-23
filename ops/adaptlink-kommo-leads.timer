@@ -1,0 +1,10 @@
+[Unit]
+Description=AdaptLink Kommo leads daily timer
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+Unit=adaptlink-kommo-leads.service
+
+[Install]
+WantedBy=timers.target

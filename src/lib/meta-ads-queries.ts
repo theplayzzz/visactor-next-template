@@ -1,4 +1,4 @@
-import { min, sql } from "drizzle-orm";
+import { max, min, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { adsInsights } from "@/db/schema";
@@ -74,7 +74,11 @@ export async function getCampanhasMetrics(
     }
   >();
 
-  let lastExtractedAt: Date | null = null;
+  const [freshness] = await db.select({
+    extractedAt: max(adsInsights._airbyteExtractedAt),
+    reportingDate: max(adsInsights.dateStart),
+  }).from(adsInsights);
+  const lastExtractedAt = freshness?.extractedAt ?? null;
 
   for (const row of rows) {
     const spend = Number(row.spend || 0);
@@ -142,13 +146,6 @@ export async function getCampanhasMetrics(
     c.reach += reach;
     c.leads += rowLeads;
 
-    // Last extracted
-    if (
-      row._airbyteExtractedAt &&
-      (!lastExtractedAt || row._airbyteExtractedAt > lastExtractedAt)
-    ) {
-      lastExtractedAt = row._airbyteExtractedAt;
-    }
   }
 
   // Derived overview KPIs
@@ -223,6 +220,8 @@ export async function getCampanhasMetrics(
     conversionRateRanking: toRankingArray(conversionRateCounts),
     engagementRateRanking: toRankingArray(engagementRateCounts),
     lastExtractedAt,
+    lastReportingDate: freshness?.reportingDate ?? null,
+    hasRows: rows.length > 0,
   };
 }
 

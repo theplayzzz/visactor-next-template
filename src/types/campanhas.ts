@@ -50,4 +50,6 @@ export interface CampanhasMetrics {
   engagementRateRanking: RankingDistribution[];
 
   lastExtractedAt: Date | null;
+  lastReportingDate?: string | null;
+  hasRows?: boolean;
 }
