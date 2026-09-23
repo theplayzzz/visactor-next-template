@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -394,7 +394,7 @@ export async function syncEvents(): Promise<{
 
       if (events.length === 0) break;
 
-      for (const event of events) {
+      const values = events.map((event) => {
         const statusBefore =
           event.value_before?.[0]?.lead_status?.id ?? null;
         const statusAfter =
@@ -404,29 +404,30 @@ export async function syncEvents(): Promise<{
         const pipelineAfter =
           event.value_after?.[0]?.lead_status?.pipeline_id ?? null;
 
-        await db
-          .insert(kommoLeadEvents)
-          .values({
-            id: event.id,
-            leadId: event.entity_id,
-            type: event.type,
-            statusBefore,
-            statusAfter,
-            pipelineBefore,
-            pipelineAfter,
-            responsibleUserId: event.created_by,
-            eventAt: new Date(event.created_at * 1000),
-          })
-          .onConflictDoUpdate({
-            target: kommoLeadEvents.id,
-            set: {
-              statusBefore,
-              statusAfter,
-              pipelineBefore,
-              pipelineAfter,
-            },
-          });
-      }
+        return {
+          id: event.id,
+          leadId: event.entity_id,
+          type: event.type,
+          statusBefore,
+          statusAfter,
+          pipelineBefore,
+          pipelineAfter,
+          responsibleUserId: event.created_by,
+          eventAt: new Date(event.created_at * 1000),
+        };
+      });
+      await db
+        .insert(kommoLeadEvents)
+        .values(values)
+        .onConflictDoUpdate({
+          target: kommoLeadEvents.id,
+          set: {
+            statusBefore: sql`excluded.status_before`,
+            statusAfter: sql`excluded.status_after`,
+            pipelineBefore: sql`excluded.pipeline_before`,
+            pipelineAfter: sql`excluded.pipeline_after`,
+          },
+        });
 
       logger.addProcessed(events.length);
       eventsProcessed += events.length;

@@ -16,6 +16,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/scripts/sync-meta-ads.mjs ./scripts/sync-meta-ads.mjs
 COPY --from=builder /app/scripts/audit-meta-ads.mjs ./scripts/audit-meta-ads.mjs
+COPY --from=builder /app/scripts/audit-kommo-sync.mjs ./scripts/audit-kommo-sync.mjs
 COPY --from=builder /app/scripts/run-kommo-cron.mjs ./scripts/run-kommo-cron.mjs
 USER node
 EXPOSE 3000

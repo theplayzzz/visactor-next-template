@@ -22,6 +22,10 @@
 - Na Meta, `lead` é o evento de lead reportado pela plataforma, **não** o número de conversas WhatsApp nem o número de oportunidades no Kommo. Conversas iniciadas aparecem separadamente.
 - Alcance somado de linhas anúncio/dia não é alcance único de um período; frequência calculada com essa soma é estimativa. Para alcance único exato de intervalo arbitrário, consultar a Graph API no nível/período solicitado ou armazenar snapshots agregados por período.
 - As métricas de retorno comercial dependem da qualidade do vínculo entre lead/CRM e origem de campanha. Esta migração recupera disponibilidade da mídia Meta; não resolve por si só atribuição incompleta, definição de MQL ou eventos de CRM ausentes.
+- Hoje, a origem comercial é inferida por tags do Kommo (`meta`/`facebook`/`instagram` ou `google`). **Qualquer lead sem essas tags cai em “Outbound”**, inclusive indicação ou origem desconhecida; este rótulo não prova prospecção ativa. É necessário padronizar UTMs/campos de origem no CRM e separar “sem origem”.
+- MQL é calculado pelo **status atual** em uma lista fixa de IDs, não pelo histórico de passagem. Uma venda pode deixar de contar como MQL do mesmo recorte; por isso MQL→Venda pode superar 100%. Para corrigir, usar eventos de status do Kommo com regra e janela temporal acordadas com o comercial.
+- O coletor de eventos do Kommo estava limitado a 50 segundos e reiniciava da página 1. Agora retoma de `sync_state.last_page`, tem limite de 10 minutos por rodada e grava até 100 eventos por lote; se houver muito histórico, a primeira sincronização pode terminar como parcial e continuar na execução seguinte.
+- Leads são filtrados pela **data de criação**, vendas/perdas pela **data de fechamento**. Portanto as taxas Lead→Venda de um mesmo intervalo não são conversões de uma coorte única; usar análise de coorte se esse for o objetivo.
 - O Google Ads continua com a latência e o escopo do dataset BigQuery/DTS já configurado. Verificar atualização do dataset separadamente dos dados Meta.
 
 ## Operação e retorno
@@ -29,3 +33,11 @@
 - Falhas: `systemctl status adaptlink-meta.timer`, `journalctl -u adaptlink-meta.service -n 100`, `docker logs --tail 100 adaptlink-app`, `docker stats --no-stream adaptlink-app`.
 - Reiniciar apenas o serviço: `cd /opt/adaptlink/app && docker compose up -d --no-deps app`.
 - Se o corte falhar, restaurar o CNAME anterior `6d5c38311cc4f386.vercel-dns-017.com`, manter o projeto Vercel ativo e investigar sem apagar dados Neon. A coleta Meta é idempotente e pode continuar mesmo se a exibição voltar temporariamente à Vercel.
+
+## Registro do corte em 2026-09-23
+
+- VPS `178.156.151.53`: Docker saudável; `/api/health`, comercial, campanhas Google/Meta, NPS e Google Sheets responderam 200. Uso observado do app: cerca de 190–223 MiB de RAM sob carga leve/sincronismo, dentro de 640 MiB.
+- Google Ads (24/08–22/09): Vercel e VPS idênticos — R$ 766,17 de gasto, 88 conversões, 823 cliques e 9.064 impressões. A fonte continua BigQuery DTS.
+- Meta (21–22/09): R$ 113,00, 73 cliques, 5.216 impressões e 10 conversas iniciadas. A Graph API devolveu R$ 58,43 em 21/09, igual à página. Backfill 30/05–22/09 gerou 116 linhas, R$ 4.798,65; 0 dias/anúncios sobrepostos ao Airbyte. Reexecução de 21/09 manteve 116 linhas.
+- Cloudflare: `adapt.link` alterado de CNAME Vercel para A `178.156.151.53`, somente DNS. HTTPS validado com certificado público e HTTP 200 no domínio definitivo.
+- Vercel: crons desativados, integração Git removida e produção pausada. Não excluir ainda: ela é o plano de retorno. O DNS deve voltar ao CNAME anterior e o projeto deve ser retomado para rollback.
